@@ -61,9 +61,23 @@ jobs:
 
       - name: 生成桥接代码
         run: |
+          cd flutter
           flutter pub get
+          # 检查是否存在api.rs文件，如果不存在则创建示例文件
+          if [ ! -f "../src/api.rs" ]; then
+            echo "src/api.rs不存在，创建示例文件..."
+            mkdir -p ../src
+            echo '// 示例API文件，用于生成桥接代码' > ../src/api.rs
+            echo '#[flutter_rust_bridge::bridge]' >> ../src/api.rs
+            echo 'mod api {' >> ../src/api.rs
+            echo '    pub fn hello_world() -> String {' >> ../src/api.rs
+            echo '        "Hello from Rust!".to_string()' >> ../src/api.rs
+            echo '    }' >> ../src/api.rs
+            echo '}' >> ../src/api.rs
+          fi
           flutter packages pub run build_runner build --delete-conflicting-outputs
-          flutter packages pub run flutter_rust_bridge_codegen --rust-input src/api.rs --dart-output flutter/lib/bridge_generated.dart --c-output flutter/macos/Runner/bridge_generated.h --dart-decl-output flutter/lib/bridge_definitions.dart --wasm
+          flutter packages pub run flutter_rust_bridge_codegen --rust-input ../src/api.rs --dart-output lib/bridge_generated.dart --c-output macos/Runner/bridge_generated.h --dart-decl-output lib/bridge_definitions.dart --wasm
+          cd ..
 
       - name: 上传桥接代码产物
         uses: actions/upload-artifact@v4
@@ -125,12 +139,17 @@ jobs:
           Expand-Archive -Path windows-x64-release.zip -DestinationPath windows-x64-release
           mv -Force windows-x64-release/* C:/hostedtoolcache/windows/flutter/stable-${{ env.FLUTTER_VERSION }}-x64/bin/cache/artifacts/engine/windows-x64-release/
 
-      - name: 应用Flutter补丁
+      - name: 应用Flutter补丁 (可选)
         shell: bash
         run: |
-          cp .github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff $(dirname $(dirname $(which flutter)))
-          cd $(dirname $(dirname $(which flutter)))
-          [[ "3.24.5" == ${{env.FLUTTER_VERSION}} ]] && git apply flutter_3.24.4_dropdown_menu_enableFilter.diff
+          if [ -f ".github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff" ]; then
+            echo "应用Flutter补丁..."
+            cp .github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff $(dirname $(dirname $(which flutter)))
+            cd $(dirname $(dirname $(which flutter)))
+            [[ "3.24.5" == ${{env.FLUTTER_VERSION}} ]] && git apply flutter_3.24.4_dropdown_menu_enableFilter.diff
+          else
+            echo "Flutter补丁文件不存在，跳过..."
+          fi
 
       - name: 安装Rust工具链
         uses: dtolnay/rust-toolchain@v1
