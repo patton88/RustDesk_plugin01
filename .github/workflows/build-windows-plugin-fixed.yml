@@ -1,4 +1,4 @@
-name: 构建支持插件的Windows客户端
+name: 构建支持插件的Windows客户端 (修复版)
 
 on:
   workflow_dispatch:
