@@ -5807,6 +5807,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rd_ui_plugin"
+version = "0.1.0"
+dependencies = [
+ "hbb_common",
+ "lazy_static",
+ "serde 1.0.203",
+ "serde_json 1.0.118",
+]
+
+[[package]]
 name = "rdev"
 version = "0.5.0-2"
 source = "git+https://github.com/rustdesk-org/rdev#f9b60b1dd0f3300a1b797d7a74c116683cd232c8"
