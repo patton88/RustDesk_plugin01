@@ -1,0 +1,241 @@
+name: "RustDesk Plugin Build - 最终版本"
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: '构建类型'
+        required: true
+        default: 'release'
+        type: choice
+        options:
+        - release
+        - debug
+
+jobs:
+  generate-bridge:
+    name: "生成Flutter Rust Bridge代码"
+    runs-on: ubuntu-latest
+    steps:
+      - name: "检出代码"
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "安装Flutter"
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.5'
+          channel: 'stable'
+
+      - name: "全新修复Flutter依赖"
+        run: |
+          echo "=== 开始全新修复Flutter依赖 ==="
+          cd flutter
+          echo "当前pubspec.yaml内容:"
+          cat pubspec.yaml
+          
+          echo "=== 强制添加flutter_rust_bridge_codegen ==="
+          if ! grep -q "flutter_rust_bridge_codegen" pubspec.yaml; then
+            echo "  flutter_rust_bridge_codegen:" >> pubspec.yaml
+            echo "    git:" >> pubspec.yaml
+            echo "      url: https://github.com/fzyzcjy/flutter_rust_bridge" >> pubspec.yaml
+            echo "      path: flutter_rust_bridge_codegen" >> pubspec.yaml
+          fi
+          
+          echo "=== 清理Flutter缓存 ==="
+          flutter clean
+          flutter pub cache clean
+          
+          echo "=== 重新安装依赖 ==="
+          flutter pub get
+          
+          echo "=== 验证依赖安装 ==="
+          flutter pub deps | grep -i bridge || echo "未找到bridge相关依赖"
+          echo "=== Flutter依赖修复完成 ==="
+
+      - name: "生成桥接代码"
+        run: |
+          echo "=== 开始生成桥接代码 ==="
+          cd flutter
+          
+          echo "=== 创建src/api.rs ==="
+          mkdir -p ../src
+          cat > ../src/api.rs << 'EOF'
+          use serde::{Deserialize, Serialize};
+
+          #[derive(Debug, Clone, Serialize, Deserialize)]
+          pub struct AppInfo {
+              pub version: String,
+              pub name: String,
+          }
+
+          pub fn get_version() -> String {
+              env!("CARGO_PKG_VERSION").to_string()
+          }
+
+          pub fn app_info_new() -> AppInfo {
+              AppInfo {
+                  version: get_version(),
+                  name: "RustDesk".to_string(),
+              }
+          }
+          EOF
+          
+          echo "=== 运行build_runner ==="
+          flutter packages pub run build_runner build --delete-conflicting-outputs
+          
+          echo "=== 生成Flutter Rust Bridge代码 ==="
+          flutter packages pub run flutter_rust_bridge_codegen \
+            --rust-input ../src/api.rs \
+            --dart-output lib/bridge_generated.dart \
+            --rust-output ../src/bridge_generated.rs \
+            --class-name RustDeskApi \
+            --wasm
+          
+          echo "=== 桥接代码生成完成 ==="
+          
+          echo "=== 验证生成的文件 ==="
+          ls -la ../src/
+          ls -la lib/
+
+      - name: "上传桥接代码"
+        uses: actions/upload-artifact@v4
+        with:
+          name: bridge-artifact-final
+          path: |
+            ../src/api.rs
+            ../src/bridge_generated.rs
+            lib/bridge_generated.dart
+            lib/bridge_definitions.dart
+
+  build-windows-plugin:
+    name: "构建Windows插件"
+    needs: generate-bridge
+    runs-on: windows-latest
+    steps:
+      - name: "检出代码"
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "下载桥接代码"
+        uses: actions/download-artifact@v4
+        with:
+          name: bridge-artifact-final
+          path: .
+
+      - name: "设置LLVM环境"
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: '2024.12.19'
+          vcpkgDirectory: '${{ github.workspace }}/vcpkg_installed'
+
+      - name: "安装Flutter"
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.5'
+          channel: 'stable'
+
+      - name: "安装Rust"
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: "设置环境变量"
+        run: |
+          echo "RUSTFLAGS=-C target-feature=+crt-static" >> $env:GITHUB_ENV
+          echo "CARGO_NET_GIT_FETCH_WITH_CLI=true" >> $env:GITHUB_ENV
+
+      - name: "构建插件"
+        run: |
+          echo "=== 开始构建rd_ui_plugin插件 ==="
+          cargo build --release --package rd_ui_plugin
+          
+          echo "=== 验证插件构建结果 ==="
+          if (Test-Path "target\release\plugin_rd_ui_plugin.dll") {
+              echo "✅ 插件构建成功: target\release\plugin_rd_ui_plugin.dll"
+              Get-ChildItem "target\release\plugin_rd_ui_plugin.dll" | Format-List
+          } else {
+              echo "❌ 插件构建失败"
+              exit 1
+          }
+
+      - name: "构建RustDesk主程序"
+        run: |
+          echo "=== 开始构建RustDesk主程序 ==="
+          python build.py --flutter --release
+          
+          echo "=== 验证主程序构建结果 ==="
+          if (Test-Path "target\release\rustdesk.exe") {
+              echo "✅ 主程序构建成功: target\release\rustdesk.exe"
+              Get-ChildItem "target\release\rustdesk.exe" | Format-List
+          } else {
+              echo "❌ 主程序构建失败"
+              exit 1
+          }
+
+      - name: "集成驱动程序"
+        run: |
+          echo "=== 集成驱动程序 ==="
+          if (Test-Path "target\release\drivers") {
+              echo "✅ 驱动程序目录存在"
+              Get-ChildItem "target\release\drivers" -Recurse | Format-List
+          } else {
+              echo "⚠️ 驱动程序目录不存在，跳过"
+          }
+
+      - name: "复制插件文件"
+        run: |
+          echo "=== 复制插件文件到目标目录 ==="
+          $pluginDir = "target\release\plugins\rd_ui_plugin"
+          New-Item -ItemType Directory -Path $pluginDir -Force
+          
+          Copy-Item "target\release\plugin_rd_ui_plugin.dll" $pluginDir
+          
+          echo "=== 创建插件配置文件 ==="
+          $configContent = '{"fullscreen": true, "scale": "fit", "toolbar": "hide"}'
+          Set-Content -Path "$pluginDir\config.json" -Value $configContent -Encoding UTF8
+          
+          echo "=== 验证插件文件 ==="
+          Get-ChildItem $pluginDir -Recurse | Format-List
+
+      - name: "创建构建信息"
+        run: |
+          echo "=== 创建构建信息文件 ==="
+          $buildInfo = "RustDesk Plugin Build - 最终版本`n构建时间: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`nGit提交: ${{ github.sha }}`n工作流: ${{ github.workflow }}`n分支: ${{ github.ref_name }}"
+          Set-Content -Path "target\release\BUILD_INFO.txt" -Value $buildInfo -Encoding UTF8
+
+      - name: "打包输出"
+        run: |
+          echo "=== 打包构建输出 ==="
+          $version = "1.4.1-plugin-final"
+          $zipName = "rustdesk-$version-windows-x64.zip"
+          
+          Compress-Archive -Path "target\release\*" -DestinationPath $zipName -Force
+          
+          echo "=== 验证打包结果 ==="
+          if (Test-Path $zipName) {
+              echo "✅ 打包成功: $zipName"
+              Get-ChildItem $zipName | Format-List
+          } else {
+              echo "❌ 打包失败"
+              exit 1
+          }
+
+      - name: "上传构建产物"
+        uses: actions/upload-artifact@v4
+        with:
+          name: rustdesk-plugin-final-${{ github.run_number }}
+          path: |
+            target/release/
+            *.zip
+          retention-days: 30
+
+      - name: "构建完成通知"
+        run: |
+          echo "🎉 RustDesk插件构建完成！"
+          echo "📦 构建产物: rustdesk-plugin-final-${{ github.run_number }}"
+          echo "🔌 插件文件: target\release\plugins\rd_ui_plugin\"
+          echo "🚀 主程序: target\release\rustdesk.exe"
