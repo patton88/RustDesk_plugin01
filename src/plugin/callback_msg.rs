@@ -4,6 +4,8 @@ use crate::{
     flutter::{self, APP_TYPE_CM, APP_TYPE_MAIN},
     ui_interface::get_api_server,
 };
+use crate::flutter::sessions;
+use hbb_common::rendezvous_proto::ConnType;
 use hbb_common::{lazy_static, log, message_proto::PluginRequest};
 use serde_derive::{Deserialize, Serialize};
 use serde_json;
@@ -142,7 +144,7 @@ pub(super) extern "C" fn cb_msg(
     match &target as _ {
         MSG_TO_PEER_TARGET => {
             cb_msg_field!(peer);
-            if let Some(session) = flutter::sessions::get_session_by_peer_id(peer.clone()) {
+            if let Some(session) = sessions::get_session_by_peer_id(peer.clone(), ConnType::DEFAULT_CONN) {
                 let content_slice =
                     unsafe { std::slice::from_raw_parts(content as *const u8, len) };
                 let content_vec = Vec::from(content_slice);
