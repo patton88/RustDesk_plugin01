@@ -1,4 +1,4 @@
-name: "RustDesk Plugin Build - V3 (Edition2024兼容性修复版)"
+name: "RustDesk Plugin Build - V3 (Edition2024兼容性修复版V2)"
 
 on:
   workflow_dispatch:
@@ -17,7 +17,7 @@ env:
   FLUTTER_VERSION: "3.24.5"
   LLVM_VERSION: "15.0.6"
   VCPKG_COMMIT_ID: "6f29f12e82a8293156836ad81cc9bf5af41fe836"
-  VERSION: "1.4.1-plugin-v3-edition-fixed"
+  VERSION: "1.4.1-plugin-v3-edition-fixed-v2"
   VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
   # Enable plugin framework for RustDesk
   RUSTFLAGS: '--cfg feature="plugin_framework" -C codegen-units=1'
@@ -378,6 +378,11 @@ jobs:
                Write-Host "Found moxcms dependency, will be handled by cargo update"
              }
              
+             # Check for pxfm
+             if ($content -match "pxfm") {
+               Write-Host "Found pxfm dependency, will be handled by cargo update"
+             }
+             
              # Check for other dependencies that might need version pinning
              Write-Host "Checking for other dependencies that might need version pinning..."
           }
@@ -399,7 +404,7 @@ jobs:
           # Create a Cargo.toml override to force compatible versions
           if (Test-Path "Cargo.toml") {
               Write-Host "Creating Cargo.toml override for edition2024 compatibility..."
-              $overrideContent = "[patch.crates-io]`nmoxcms = { version = `"=0.7.4`", default-features = false }"
+              $overrideContent = "[patch.crates-io]`nmoxcms = { version = `"=0.7.4`", default-features = false }`npxfm = { version = `"=0.1.19`", default-features = false }"
               $overrideContent | Out-File -FilePath "Cargo.toml.override" -Encoding UTF8
               Write-Host "✅ Created Cargo.toml.override with edition2024-compatible versions"
           }
@@ -474,6 +479,15 @@ jobs:
               Write-Host "✅ Successfully pinned moxcms to 0.7.4"
           } catch {
               Write-Host "⚠️  Could not pin moxcms, will use latest compatible version"
+          }
+          
+          # Try to pin pxfm to a compatible version (avoid edition2024 requirement)
+          Write-Host "Attempting to pin pxfm to compatible version..."
+          try {
+              cargo update pxfm --precise 0.1.19
+              Write-Host "✅ Successfully pinned pxfm to 0.1.19"
+          } catch {
+              Write-Host "⚠️  Could not pin pxfm, will use latest compatible version"
           }
           
           # Force clean build
@@ -562,7 +576,7 @@ jobs:
       - name: Create build info
         run: |
           Write-Host "=== 创建构建信息文件 (V3) ==="
-          $buildInfo = "RustDesk Plugin Build - V3 (Edition2024兼容性修复版)`n构建时间: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`nGit提交: ${{ github.sha }}`n工作流: ${{ github.workflow }}`n分支: ${{ github.ref_name }}`n插件: rd_ui_plugin`n插件系统: 已启用 (plugin_framework)`n特性: flutter,plugin_framework`nRust版本: 1.82 (智能版本比较)`n依赖版本: 自动锁定到兼容版本`nEdition2024兼容性: 自动降级到兼容版本`n缓存清理: 强制清理所有缓存`n版本: V3-Edition-Fixed - 解决Edition2024兼容性问题`n支持: 全屏控制、尺寸调整、工具栏隐藏"
+          $buildInfo = "RustDesk Plugin Build - V3 (Edition2024兼容性修复版V2)`n构建时间: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`nGit提交: ${{ github.sha }}`n工作流: ${{ github.workflow }}`n分支: ${{ github.ref_name }}`n插件: rd_ui_plugin`n插件系统: 已启用 (plugin_framework)`n特性: flutter,plugin_framework`nRust版本: 1.82 (智能版本比较)`n依赖版本: 自动锁定到兼容版本`nEdition2024兼容性: 自动降级到兼容版本 (moxcms+pxfm)`n缓存清理: 强制清理所有缓存`n版本: V3-Edition-Fixed-V2 - 解决多个Edition2024兼容性问题`n支持: 全屏控制、尺寸调整、工具栏隐藏"
           Set-Content -Path ".\rustdesk\BUILD_INFO.txt" -Value $buildInfo -Encoding UTF8
 
       - name: Upload RustDesk.exe
