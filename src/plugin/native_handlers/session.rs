@@ -69,7 +69,7 @@ impl PluginNativeHandler for PluginNativeSessionHandler {
                                     session.connection_round_state.lock().unwrap().new_round();
                                 // io_loop expects Session<T>, not Arc<Session<T>>
                                 // FlutterSession is Arc<Session<FlutterHandler>>, so we can clone the inner Session
-                                let session_deref: Session<FlutterHandler> = (*session).clone();
+                                let session_deref: Session<FlutterHandler> = (**session).clone();
                                 tokio::spawn(async move {
                                     crate::ui_session_interface::io_loop(session_deref, round).await;
                                 });
