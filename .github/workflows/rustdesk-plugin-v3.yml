@@ -1,4 +1,4 @@
-name: "RustDesk Plugin Build - V3 (缓存清理版)"
+name: "RustDesk Plugin Build - V3 (缓存清理�?"
 
 on:
   workflow_dispatch:
@@ -20,7 +20,7 @@ env:
   VERSION: "1.4.1-plugin-v3"
   VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
   # Enable plugin framework for RustDesk
-  RUSTFLAGS: "--cfg feature=\"plugin_framework\" -C codegen-units=1"
+  RUSTFLAGS: '--cfg feature="plugin_framework" -C codegen-units=1'
   CARGO_FEATURE_PLUGIN_FRAMEWORK: "1"
   # Force clean build
   CARGO_INCREMENTAL: "0"
@@ -309,9 +309,9 @@ jobs:
           # Verify plugin_framework feature is available
           Write-Host "Checking plugin_framework feature availability..."
           if (cargo check --features plugin_framework --package rustdesk --message-format=short 2>&1 | Select-String -Pattern "plugin_framework" -Quiet) {
-              Write-Host "✅ plugin_framework feature is available"
+              Write-Host "�?plugin_framework feature is available"
           } else {
-              Write-Host "❌ plugin_framework feature is NOT available"
+              Write-Host "�?plugin_framework feature is NOT available"
               Write-Host "This will prevent plugins from working!"
           }
           
@@ -321,10 +321,10 @@ jobs:
           
           Write-Host "=== 验证插件构建结果 ==="
           if (Test-Path "target\release\plugin_rd_ui_plugin.dll") {
-              Write-Host "✅ 插件构建成功: target\release\plugin_rd_ui_plugin.dll"
+              Write-Host "�?插件构建成功: target\release\plugin_rd_ui_plugin.dll"
               Get-ChildItem "target\release\plugin_rd_ui_plugin.dll" | Format-List
           } else {
-              Write-Host "❌ 插件构建失败"
+              Write-Host "�?插件构建失败"
               exit 1
           }
 
@@ -345,7 +345,7 @@ jobs:
           # Verify that plugin_framework feature was enabled
           Write-Host "Checking if plugin_framework was compiled..."
           if (Select-String -Path "target\release\build\rustdesk-*\out\build_script_build-*.out" -Pattern "plugin_framework" -Quiet) {
-              Write-Host "✅ plugin_framework feature was enabled during build"
+              Write-Host "�?plugin_framework feature was enabled during build"
           } else {
               Write-Host "⚠️  plugin_framework feature status unclear, checking binary..."
           }
@@ -368,7 +368,7 @@ jobs:
               Write-Host "Checking if rustdesk.exe contains plugin support..."
               $binaryContent = Get-Content ".\rustdesk\rustdesk.exe" -Raw -ErrorAction SilentlyContinue
               if ($binaryContent -match "plugin") {
-                  Write-Host "✅ RustDesk binary contains plugin-related symbols"
+                  Write-Host "�?RustDesk binary contains plugin-related symbols"
               } else {
                   Write-Host "⚠️  RustDesk binary may not have plugin support"
               }
@@ -400,7 +400,7 @@ jobs:
       - name: Create build info
         run: |
           Write-Host "=== 创建构建信息文件 (V3) ==="
-          $buildInfo = "RustDesk Plugin Build - V3 (缓存清理版)`n构建时间: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`nGit提交: ${{ github.sha }}`n工作流: ${{ github.workflow }}`n分支: ${{ github.ref_name }}`n插件: rd_ui_plugin`n插件系统: 已启用 (plugin_framework)`n特性: flutter,plugin_framework`n缓存清理: 强制清理所有缓存`n版本: V3 - 避免编译器缓存问题`n支持: 全屏控制、尺寸调整、工具栏隐藏"
+          $buildInfo = "RustDesk Plugin Build - V3 (缓存清理�?`n构建时间: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`nGit提交: ${{ github.sha }}`n工作�? ${{ github.workflow }}`n分支: ${{ github.ref_name }}`n插件: rd_ui_plugin`n插件系统: 已启�?(plugin_framework)`n特�? flutter,plugin_framework`n缓存清理: 强制清理所有缓存`n版本: V3 - 避免编译器缓存问题`n支持: 全屏控制、尺寸调整、工具栏隐藏"
           Set-Content -Path ".\rustdesk\BUILD_INFO.txt" -Value $buildInfo -Encoding UTF8
 
       - name: Upload RustDesk.exe
@@ -428,9 +428,9 @@ jobs:
 
       - name: Build completion notification
         run: |
-          Write-Host "🎉 RustDesk插件构建完成 (V3)！"
+          Write-Host "🎉 RustDesk插件构建完成 (V3)�?
           Write-Host "📦 构建产物: RustDesk-Windows-x64-${{ env.VERSION }}.zip"
           Write-Host "🔌 插件文件: rustdesk\plugins\rd_ui_plugin\"
-          Write-Host "🚀 主程序: rustdesk\rustdesk.exe"
-          Write-Host "✅ 插件已集成到主程序中"
-          Write-Host "🧹 已强制清理所有缓存，避免编译器缓存问题"
+          Write-Host "🚀 主程�? rustdesk\rustdesk.exe"
+          Write-Host "�?插件已集成到主程序中"
+          Write-Host "🧹 已强制清理所有缓存，避免编译器缓存问�?
