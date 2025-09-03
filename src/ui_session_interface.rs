@@ -14,8 +14,8 @@ use std::{
     sync::{Arc, Mutex, RwLock},
     time::SystemTime,
 };
-use crate::flutter::EventToUI;
-use crate::flutter::StreamSink;
+use crate::flutter_ffi::EventToUI;
+use flutter_rust_bridge::StreamSink;
 use uuid::Uuid;
 
 #[cfg(not(feature = "flutter"))]

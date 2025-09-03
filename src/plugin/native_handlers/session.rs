@@ -6,6 +6,9 @@ use std::{
 };
 
 use flutter_rust_bridge::StreamSink;
+use crate::flutter_ffi::SessionID;
+use std::str::FromStr;
+use hbb_common::rendezvous_proto::ConnType;
 
 use crate::{define_method_prefix, flutter_ffi::EventToUI};
 
@@ -121,45 +124,39 @@ impl PluginNativeHandler for PluginNativeSessionHandler {
 
 impl PluginNativeSessionHandler {
     fn create_session(&self, session_id: String) -> String {
-        let session =
-            crate::flutter::session_add(&session_id, false, false, false, "", false, "".to_owned());
-        if let Ok(session) = session {
-            let mut sessions = self.sessions.write().unwrap();
-            sessions.push(session);
-            // push a event to notify flutter to bind a event stream for this session.
-            let mut m = HashMap::new();
-            m.insert("name", MSG_TO_UI_TYPE_SESSION_CREATED);
-            m.insert("session_id", &session_id);
-            // todo: APP_TYPE_DESKTOP_REMOTE is not used anymore.
-            // crate::flutter::APP_TYPE_DESKTOP_REMOTE + window id, is used for multi-window support.
-            crate::flutter::push_global_event(
-                crate::flutter::APP_TYPE_DESKTOP_REMOTE,
-                serde_json::to_string(&m).unwrap_or("".to_string()),
-            );
-            return session_id;
-        } else {
-            return "".to_string();
+        // Find existing session by SessionID; do not create a new session here.
+        if let Ok(sid) = SessionID::from_str(&session_id) {
+            if let Some(session) = crate::flutter::sessions::get_session_by_session_id(&sid) {
+                let mut sessions = self.sessions.write().unwrap();
+                sessions.push(session);
+                let mut m = HashMap::new();
+                m.insert("name", MSG_TO_UI_TYPE_SESSION_CREATED);
+                m.insert("session_id", &session_id);
+                let _ = crate::flutter::push_global_event(
+                    crate::flutter::APP_TYPE_DESKTOP_REMOTE,
+                    serde_json::to_string(&m).unwrap_or("".to_string()),
+                );
+                return session_id;
+            }
         }
+        "".to_string()
     }
 
     fn add_session_hook(&self, session_id: String, cb: OnSessionRgbaCallback) {
-        let sessions = self.sessions.read().unwrap();
-        for session in sessions.iter() {
-            if session.id == session_id {
-                self.cbs.write().unwrap().insert(session_id.to_owned(), cb);
+        if let Ok(sid) = SessionID::from_str(&session_id) {
+            self.cbs.write().unwrap().insert(session_id.to_owned(), cb);
+            if let Some(session) = crate::flutter::sessions::get_session_by_session_id(&sid) {
                 session.ui_handler.add_session_hook(
                     session_id,
                     crate::flutter::SessionHook::OnSessionRgba(session_rgba_cb),
                 );
-                break;
             }
         }
     }
 
     fn remove_session_hook(&self, session_id: String) {
-        let sessions = self.sessions.read().unwrap();
-        for session in sessions.iter() {
-            if session.id == session_id {
+        if let Ok(sid) = SessionID::from_str(&session_id) {
+            if let Some(session) = crate::flutter::sessions::get_session_by_session_id(&sid) {
                 session.ui_handler.remove_session_hook(&session_id);
             }
         }
@@ -167,13 +164,8 @@ impl PluginNativeSessionHandler {
 
     fn remove_session(&self, session_id: String) {
         let _ = self.cbs.write().unwrap().remove(&session_id);
-        let mut sessions = self.sessions.write().unwrap();
-        for i in 0..sessions.len() {
-            if sessions[i].id == session_id {
-                sessions[i].close_event_stream();
-                sessions[i].close();
-                sessions.remove(i);
-            }
+        if let Ok(sid) = SessionID::from_str(&session_id) {
+            let _ = crate::flutter::sessions::remove_session_by_session_id(&sid);
         }
     }
 
@@ -188,7 +180,7 @@ impl PluginNativeSessionHandler {
                     rgb.raw.as_mut_ptr() as _,
                     addr_of_mut!(rgb.w),
                     addr_of_mut!(rgb.h),
-                    addr_of_mut!(rgb.stride),
+                    addr_of_mut!(rgb.align),
                     addr_of_mut!(rgb.fmt),
                 );
             }
@@ -198,12 +190,9 @@ impl PluginNativeSessionHandler {
     #[inline]
     // The callback function for rgba data
     fn session_register_event_stream(&self, session_id: String, stream: StreamSink<EventToUI>) {
-        let sessions = self.sessions.read().unwrap();
-        for session in sessions.iter() {
-            if session.id == session_id {
-                *session.event_stream.write().unwrap() = Some(stream);
-                break;
-            }
+        if let Ok(sid) = SessionID::from_str(&session_id) {
+            // Register stream via flutter API; id is only used for logs
+            let _ = crate::flutter::session_start_(&sid, "", stream);
         }
     }
 }
