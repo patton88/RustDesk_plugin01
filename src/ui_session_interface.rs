@@ -14,6 +14,8 @@ use std::{
     sync::{Arc, Mutex, RwLock},
     time::SystemTime,
 };
+use crate::flutter::EventToUI;
+use crate::flutter::StreamSink;
 use uuid::Uuid;
 
 #[cfg(not(feature = "flutter"))]
@@ -47,6 +49,7 @@ const CHANGE_RESOLUTION_VALID_TIMEOUT_SECS: u64 = 15;
 
 #[derive(Clone, Default)]
 pub struct Session<T: InvokeUiSession> {
+    pub id: String,
     pub password: String,
     pub args: Vec<String>,
     pub lc: Arc<RwLock<LoginConfigHandler>>,
@@ -59,6 +62,7 @@ pub struct Session<T: InvokeUiSession> {
     pub last_change_display: Arc<Mutex<ChangeDisplayRecord>>,
     pub connection_round_state: Arc<Mutex<ConnectionRoundState>>,
     pub printer_names: Arc<RwLock<HashMap<i32, String>>>,
+    pub event_stream: Arc<RwLock<Option<StreamSink<EventToUI>>>>,
 }
 
 #[derive(Clone)]

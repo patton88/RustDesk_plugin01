@@ -38,7 +38,7 @@ pub(crate) const APP_TYPE_CM: &str = "main";
 
 // Do not remove the following constants.
 // Uncomment them when they are used.
-// pub(crate) const APP_TYPE_DESKTOP_REMOTE: &str = "remote";
+pub(crate) const APP_TYPE_DESKTOP_REMOTE: &str = "remote";
 // pub(crate) const APP_TYPE_DESKTOP_FILE_TRANSFER: &str = "file transfer";
 // pub(crate) const APP_TYPE_DESKTOP_PORT_FORWARD: &str = "port forward";
 
