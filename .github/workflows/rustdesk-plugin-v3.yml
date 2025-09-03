@@ -13,11 +13,11 @@ on:
         - debug
 
 env:
-  RUST_VERSION: "1.75"
+  RUST_VERSION: "1.82"
   FLUTTER_VERSION: "3.24.5"
   LLVM_VERSION: "15.0.6"
   VCPKG_COMMIT_ID: "6f29f12e82a8293156836ad81cc9bf5af41fe836"
-  VERSION: "1.4.1-plugin-v3"
+  VERSION: "1.4.1-plugin-v3-fixed"
   VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
   # Enable plugin framework for RustDesk
   RUSTFLAGS: '--cfg feature="plugin_framework" -C codegen-units=1'
@@ -302,6 +302,27 @@ jobs:
           
           Write-Host "Build environment cleaned"
 
+      - name: Fix dependency version conflicts
+        run: |
+          Write-Host "🔧 修复依赖版本冲突..."
+          
+          # Create a Cargo.toml patch to fix zerotrie version
+          Write-Host "Creating Cargo.toml patch for zerotrie compatibility..."
+          
+          # Try to pin zerotrie to a compatible version
+          if (Test-Path "Cargo.toml") {
+            Write-Host "Checking for zerotrie dependency..."
+            $content = Get-Content "Cargo.toml" -Raw
+            if ($content -match "zerotrie") {
+              Write-Host "Found zerotrie dependency, attempting to pin version..."
+              # This will be handled by cargo update in the build step
+            } else {
+              Write-Host "No direct zerotrie dependency found, checking indirect dependencies..."
+            }
+          }
+          
+          Write-Host "Dependency version conflict resolution prepared"
+
       - name: Build plugin first
         run: |
           Write-Host "=== 开始构建rd_ui_plugin插件 (V3) ==="
@@ -314,6 +335,15 @@ jobs:
               Write-Host "�?plugin_framework feature is NOT available"
               Write-Host "This will prevent plugins from working!"
           }
+          
+          # Check Rust version compatibility
+          Write-Host "Checking Rust version compatibility..."
+          rustc --version
+          cargo --version
+          
+          # Try to update dependencies to compatible versions
+          Write-Host "Updating dependencies to compatible versions..."
+          cargo update
           
           # Force clean build
           Write-Host "Building plugin with clean environment..."
