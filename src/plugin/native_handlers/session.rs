@@ -63,7 +63,11 @@ impl PluginNativeHandler for PluginNativeSessionHandler {
                             if session.id == id {
                                 let round =
                                     session.connection_round_state.lock().unwrap().new_round();
-                                crate::ui_session_interface::io_loop(session.clone(), round);
+                                // io_loop expects Session<T>, not Arc<Session<T>>
+                                let session_deref = (*session).clone();
+                                tokio::spawn(async move {
+                                    crate::ui_session_interface::io_loop(session_deref, round).await;
+                                });
                             }
                         }
                     }

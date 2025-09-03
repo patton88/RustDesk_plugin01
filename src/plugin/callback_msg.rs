@@ -1,11 +1,9 @@
 use super::*;
 use crate::hbbs_http::create_http_client;
 use crate::{
-    flutter::{self, APP_TYPE_CM, APP_TYPE_MAIN},
+    flutter::{self, APP_TYPE_CM, APP_TYPE_MAIN, SESSIONS},
     ui_interface::get_api_server,
 };
-use crate::flutter::sessions;
-use hbb_common::rendezvous_proto::ConnType;
 use hbb_common::{lazy_static, log, message_proto::PluginRequest};
 use serde_derive::{Deserialize, Serialize};
 use serde_json;
@@ -144,7 +142,7 @@ pub(super) extern "C" fn cb_msg(
     match &target as _ {
         MSG_TO_PEER_TARGET => {
             cb_msg_field!(peer);
-            if let Some(session) = sessions::get_session_by_peer_id(peer.clone(), ConnType::DEFAULT_CONN) {
+            if let Some(session) = SESSIONS.write().unwrap().get_mut(&peer) {
                 let content_slice =
                     unsafe { std::slice::from_raw_parts(content as *const u8, len) };
                 let content_vec = Vec::from(content_slice);
@@ -378,11 +376,13 @@ fn push_event_to_ui(channel: u16, peer: &str, content: &str) {
         }
     }
     if !peer.is_empty() && is_peer_channel(channel) {
-        let _res = flutter::push_session_event(
-            &peer,
-            MSG_TO_UI_TYPE_PLUGIN_EVENT,
-            vec![("peer", &peer), ("content", &content)],
-        );
+        if let Ok(uuid) = uuid::Uuid::parse_str(peer) {
+            let _res = flutter::push_session_event(
+                &uuid,
+                MSG_TO_UI_TYPE_PLUGIN_EVENT,
+                vec![("peer", &peer), ("content", &content)],
+            );
+        }
     }
 }
 
@@ -406,8 +406,10 @@ fn push_option_to_ui(channel: u16, id: &str, peer: &str, msg: &MsgToConfig, ui: 
 
     // Send remote, transfer and forward
     if !peer.is_empty() && is_peer_channel(channel) {
-        let mut v = v.to_vec();
-        v.push(("peer", &peer));
-        let _res = flutter::push_session_event(&peer, MSG_TO_UI_TYPE_PLUGIN_OPTION, v);
+        if let Ok(uuid) = uuid::Uuid::parse_str(peer) {
+            let mut v = v.to_vec();
+            v.push(("peer", &peer));
+            let _res = flutter::push_session_event(&uuid, MSG_TO_UI_TYPE_PLUGIN_OPTION, v);
+        }
     }
 }

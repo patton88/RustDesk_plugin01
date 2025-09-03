@@ -27,6 +27,7 @@ use std::{
         Arc,
     },
     time::{Duration, SystemTime},
+    str::FromStr,
 };
 
 pub type SessionID = uuid::Uuid;
