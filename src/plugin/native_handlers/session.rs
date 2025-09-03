@@ -7,8 +7,14 @@ use std::{
 };
 
 use flutter_rust_bridge::StreamSink;
+use hbb_common::tokio;
 
-use crate::{define_method_prefix, flutter_ffi::{EventToUI, SessionID}};
+use crate::{
+    define_method_prefix,
+    flutter::FlutterHandler,
+    flutter_ffi::{EventToUI, SessionID},
+    ui_session_interface::Session,
+};
 
 const MSG_TO_UI_TYPE_SESSION_CREATED: &str = "session_created";
 

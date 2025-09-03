@@ -143,7 +143,7 @@ pub(super) extern "C" fn cb_msg(
         MSG_TO_PEER_TARGET => {
             cb_msg_field!(peer);
             // Use the public API to get session by peer ID
-            if let Some(session) = flutter::sessions::get_session_by_peer_id(peer.clone(), crate::rendezvous_proto::ConnType::DEFAULT_CONN) {
+            if let Some(session) = flutter::sessions::get_session_by_peer_id(peer.clone(), hbb_common::rendezvous_proto::ConnType::DEFAULT_CONN) {
                 let content_slice =
                     unsafe { std::slice::from_raw_parts(content as *const u8, len) };
                 let content_vec = Vec::from(content_slice);
