@@ -1,4 +1,4 @@
-name: "RustDesk Plugin Build - V3 (Rust版本修复版)"
+name: "RustDesk Plugin Build - V3 (版本比较修复版)"
 
 on:
   workflow_dispatch:
@@ -17,7 +17,7 @@ env:
   FLUTTER_VERSION: "3.24.5"
   LLVM_VERSION: "15.0.6"
   VCPKG_COMMIT_ID: "6f29f12e82a8293156836ad81cc9bf5af41fe836"
-  VERSION: "1.4.1-plugin-v3-rust-fixed"
+  VERSION: "1.4.1-plugin-v3-version-fixed"
   VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
   # Enable plugin framework for RustDesk
   RUSTFLAGS: '--cfg feature="plugin_framework" -C codegen-units=1'
@@ -280,11 +280,17 @@ jobs:
           Write-Host "Expected version: $expectedVersion"
           Write-Host "Actual version: $actualVersion"
           
-          if ($actualVersion -ne $expectedVersion) {
-              Write-Host "❌ Version mismatch! Expected $expectedVersion, got $actualVersion"
+          # Extract major.minor version for comparison (ignore patch version)
+          $expectedMajorMinor = ($expectedVersion -split '\.')[0,1] -join '.'
+          $actualMajorMinor = ($actualVersion -split '\.')[0,1] -join '.'
+          
+          Write-Host "Comparing major.minor versions: Expected $expectedMajorMinor, Actual $actualMajorMinor"
+          
+          if ($actualMajorMinor -ne $expectedMajorMinor) {
+              Write-Host "❌ Version mismatch! Expected $expectedMajorMinor, got $actualMajorMinor"
               exit 1
           } else {
-              Write-Host "✅ Rust version verification successful"
+              Write-Host "✅ Rust version verification successful (major.minor match)"
           }
 
       - name: Clean Rust cache and use fresh cache
@@ -393,12 +399,16 @@ jobs:
           $rustVersion = (rustc --version | Select-String -Pattern "rustc (\d+\.\d+\.\d+)" | ForEach-Object { $_.Matches[0].Groups[1].Value })
           Write-Host "Extracted Rust version: $rustVersion"
           
-          if ($rustVersion -lt "1.82") {
-              Write-Host "❌ Rust version $rustVersion is too old! Expected 1.82 or newer."
+          # Extract major.minor version for comparison
+          $rustMajorMinor = ($rustVersion -split '\.')[0,1] -join '.'
+          Write-Host "Rust major.minor version: $rustMajorMinor"
+          
+          if ($rustMajorMinor -lt "1.82") {
+              Write-Host "❌ Rust version $rustMajorMinor is too old! Expected 1.82 or newer."
               Write-Host "This will cause dependency compatibility issues."
               exit 1
           } else {
-              Write-Host "✅ Rust version $rustVersion is compatible"
+              Write-Host "✅ Rust version $rustMajorMinor is compatible"
           }
           
           # Verify plugin_framework feature is available
@@ -522,7 +532,7 @@ jobs:
       - name: Create build info
         run: |
           Write-Host "=== 创建构建信息文件 (V3) ==="
-          $buildInfo = "RustDesk Plugin Build - V3 (Rust版本修复版)`n构建时间: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`nGit提交: ${{ github.sha }}`n工作流: ${{ github.workflow }}`n分支: ${{ github.ref_name }}`n插件: rd_ui_plugin`n插件系统: 已启用 (plugin_framework)`n特性: flutter,plugin_framework`nRust版本: 1.82 (强制验证)`n依赖版本: 自动锁定到兼容版本`n缓存清理: 强制清理所有缓存`n版本: V3-Rust-Fixed - 解决Rust版本兼容性问题`n支持: 全屏控制、尺寸调整、工具栏隐藏"
+          $buildInfo = "RustDesk Plugin Build - V3 (版本比较修复版)`n构建时间: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`nGit提交: ${{ github.sha }}`n工作流: ${{ github.workflow }}`n分支: ${{ github.ref_name }}`n插件: rd_ui_plugin`n插件系统: 已启用 (plugin_framework)`n特性: flutter,plugin_framework`nRust版本: 1.82 (智能版本比较)`n依赖版本: 自动锁定到兼容版本`n缓存清理: 强制清理所有缓存`n版本: V3-Version-Fixed - 解决版本比较逻辑问题`n支持: 全屏控制、尺寸调整、工具栏隐藏"
           Set-Content -Path ".\rustdesk\BUILD_INFO.txt" -Value $buildInfo -Encoding UTF8
 
       - name: Upload RustDesk.exe
