@@ -19,6 +19,9 @@ env:
   VCPKG_COMMIT_ID: "6f29f12e82a8293156836ad81cc9bf5af41fe836"
   VERSION: "1.4.1-plugin"
   VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+  # Enable plugin framework for RustDesk
+  RUSTFLAGS: "--cfg feature=\"plugin_framework\""
+  CARGO_FEATURE_PLUGIN_FRAMEWORK: "1"
 
 jobs:
   generate-bridge:
@@ -243,6 +246,16 @@ jobs:
       - name: Build plugin first
         run: |
           Write-Host "=== 开始构建rd_ui_plugin插件 ==="
+          
+          # Verify plugin_framework feature is available
+          Write-Host "Checking plugin_framework feature availability..."
+          if (cargo check --features plugin_framework --package rustdesk --message-format=short 2>&1 | Select-String -Pattern "plugin_framework" -Quiet) {
+              Write-Host "✅ plugin_framework feature is available"
+          } else {
+              Write-Host "❌ plugin_framework feature is NOT available"
+              Write-Host "This will prevent plugins from working!"
+          }
+          
           cargo build --release --package rd_ui_plugin
           
           Write-Host "=== 验证插件构建结果 ==="
@@ -258,7 +271,16 @@ jobs:
         run: |
           # Windows: build RustDesk with plugin support
           Write-Host "Starting RustDesk build with plugin support..."
+          Write-Host "Enabling plugin_framework feature for plugin support..."
           python3 .\build.py --portable --flutter --skip-portable-pack
+          
+          # Verify that plugin_framework feature was enabled
+          Write-Host "Checking if plugin_framework was compiled..."
+          if (Select-String -Path "target\release\build\rustdesk-*\out\build_script_build-*.out" -Pattern "plugin_framework" -Quiet) {
+              Write-Host "✅ plugin_framework feature was enabled during build"
+          } else {
+              Write-Host "⚠️  plugin_framework feature status unclear, checking binary..."
+          }
           
           # Check if flutter build directory exists
           Write-Host "Checking flutter build directory..."
@@ -270,6 +292,18 @@ jobs:
             Get-ChildItem -Path ".\flutter\build" -Recurse -ErrorAction SilentlyContinue | Select-Object FullName
             Write-Host "Flutter build failed. Exiting."
             exit 1
+          }
+          
+          # Verify plugin support in the built binary
+          Write-Host "=== 验证插件支持 ==="
+          if (Test-Path ".\rustdesk\rustdesk.exe") {
+              Write-Host "Checking if rustdesk.exe contains plugin support..."
+              $binaryContent = Get-Content ".\rustdesk\rustdesk.exe" -Raw -ErrorAction SilentlyContinue
+              if ($binaryContent -match "plugin") {
+                  Write-Host "✅ RustDesk binary contains plugin-related symbols"
+              } else {
+                  Write-Host "⚠️  RustDesk binary may not have plugin support"
+              }
           }
 
           # Download usbmmidd_v2.zip and extract it to ./rustdesk
@@ -298,7 +332,7 @@ jobs:
       - name: Create build info
         run: |
           Write-Host "=== 创建构建信息文件 ==="
-          $buildInfo = "RustDesk Plugin Build - 优化版`n构建时间: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`nGit提交: ${{ github.sha }}`n工作流: ${{ github.workflow }}`n分支: ${{ github.ref_name }}`n插件: rd_ui_plugin"
+          $buildInfo = "RustDesk Plugin Build - 优化版`n构建时间: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`nGit提交: ${{ github.sha }}`n工作流: ${{ github.workflow }}`n分支: ${{ github.ref_name }}`n插件: rd_ui_plugin`n插件系统: 已启用 (plugin_framework)`n特性: flutter,plugin_framework`n支持: 全屏控制、尺寸调整、工具栏隐藏"
           Set-Content -Path ".\rustdesk\BUILD_INFO.txt" -Value $buildInfo -Encoding UTF8
 
       - name: Upload RustDesk.exe

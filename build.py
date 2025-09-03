@@ -284,6 +284,11 @@ def get_features(args):
     if osx:
         if args.screencapturekit:
             features.append('screencapturekit')
+    
+    # Enable plugin framework for desktop builds so RustDesk can load plugins
+    if args.flutter and 'plugin_framework' not in features:
+        features.append('plugin_framework')
+    
     print("features:", features)
     return features
 
