@@ -1,4 +1,4 @@
-name: "RustDesk Plugin Build - V3 (缓存清理版)"
+name: "RustDesk Plugin Build - V3 (Rust版本修复版)"
 
 on:
   workflow_dispatch:
@@ -17,7 +17,7 @@ env:
   FLUTTER_VERSION: "3.24.5"
   LLVM_VERSION: "15.0.6"
   VCPKG_COMMIT_ID: "6f29f12e82a8293156836ad81cc9bf5af41fe836"
-  VERSION: "1.4.1-plugin-v3-fixed"
+  VERSION: "1.4.1-plugin-v3-rust-fixed"
   VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
   # Enable plugin framework for RustDesk
   RUSTFLAGS: '--cfg feature="plugin_framework" -C codegen-units=1'
@@ -248,6 +248,44 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           targets: x86_64-pc-windows-msvc
           components: "rustfmt"
+          profile: minimal
+
+      - name: Force Rust version and verify installation
+        run: |
+          Write-Host "=== 强制设置Rust版本并验证安装 ==="
+          
+          # Force Rust version in PATH
+          Write-Host "Setting Rust version in PATH..."
+          $rustPath = "$env:USERPROFILE\.cargo\bin"
+          $env:PATH = "$rustPath;$env:PATH"
+          
+          # Verify Rust installation
+          Write-Host "Verifying Rust installation..."
+          Write-Host "Rust path: $rustPath"
+          Write-Host "Rustc location:"
+          where rustc
+          Write-Host "Cargo location:"
+          where cargo
+          
+          # Force version check
+          Write-Host "Rust version:"
+          rustc --version
+          Write-Host "Cargo version:"
+          cargo --version
+          
+          # Verify version matches expected
+          $expectedVersion = "${{ env.RUST_VERSION }}"
+          $actualVersion = (rustc --version | Select-String -Pattern "rustc (\d+\.\d+\.\d+)" | ForEach-Object { $_.Matches[0].Groups[1].Value })
+          
+          Write-Host "Expected version: $expectedVersion"
+          Write-Host "Actual version: $actualVersion"
+          
+          if ($actualVersion -ne $expectedVersion) {
+              Write-Host "❌ Version mismatch! Expected $expectedVersion, got $actualVersion"
+              exit 1
+          } else {
+              Write-Host "✅ Rust version verification successful"
+          }
 
       - name: Clean Rust cache and use fresh cache
         run: |
@@ -306,29 +344,65 @@ jobs:
         run: |
           Write-Host "🔧 修复依赖版本冲突..."
           
-          # Create a Cargo.toml patch to fix zerotrie version
-          Write-Host "Creating Cargo.toml patch for zerotrie compatibility..."
+          # Force Rust version check
+          Write-Host "Checking Rust version..."
+          rustc --version
+          cargo --version
           
-          # Try to pin zerotrie to a compatible version
+          # Create a Cargo.toml patch to fix dependency version conflicts
+          Write-Host "Creating Cargo.toml patch for dependency compatibility..."
+          
+          # Check for problematic dependencies
           if (Test-Path "Cargo.toml") {
-            Write-Host "Checking for zerotrie dependency..."
+            Write-Host "Checking for problematic dependencies..."
             $content = Get-Content "Cargo.toml" -Raw
+            
+            # Check for zerotrie
             if ($content -match "zerotrie") {
-              Write-Host "Found zerotrie dependency, attempting to pin version..."
-              # This will be handled by cargo update in the build step
-            } else {
-              Write-Host "No direct zerotrie dependency found, checking indirect dependencies..."
+              Write-Host "Found zerotrie dependency, will be handled by cargo update"
             }
+            
+            # Check for rayon-core
+            if ($content -match "rayon-core") {
+              Write-Host "Found rayon-core dependency, will be handled by cargo update"
+            }
+            
+            # Check for other dependencies that might need version pinning
+            Write-Host "Checking for other dependencies that might need version pinning..."
           }
           
-          Write-Host "Dependency version conflict resolution prepared"
+          # Force update all dependencies to compatible versions
+          Write-Host "Forcing update of all dependencies to compatible versions..."
+          cargo update --aggressive
+          
+          Write-Host "Dependency version conflict resolution completed"
 
       - name: Build plugin first
         run: |
           Write-Host "=== 开始构建rd_ui_plugin插件 (V3) ==="
           
+          # Force Rust version verification
+          Write-Host "=== 强制验证Rust版本 ==="
+          Write-Host "Expected Rust version: ${{ env.RUST_VERSION }}"
+          Write-Host "Actual Rust version:"
+          rustc --version
+          Write-Host "Cargo version:"
+          cargo --version
+          
+          # Verify Rust version matches expected
+          $rustVersion = (rustc --version | Select-String -Pattern "rustc (\d+\.\d+\.\d+)" | ForEach-Object { $_.Matches[0].Groups[1].Value })
+          Write-Host "Extracted Rust version: $rustVersion"
+          
+          if ($rustVersion -lt "1.82") {
+              Write-Host "❌ Rust version $rustVersion is too old! Expected 1.82 or newer."
+              Write-Host "This will cause dependency compatibility issues."
+              exit 1
+          } else {
+              Write-Host "✅ Rust version $rustVersion is compatible"
+          }
+          
           # Verify plugin_framework feature is available
-          Write-Host "Checking plugin_framework feature availability..."
+          Write-Host "=== 验证plugin_framework特性 ==="
           if (cargo check --features plugin_framework --package rustdesk --message-format=short 2>&1 | Select-String -Pattern "plugin_framework" -Quiet) {
               Write-Host "✅ plugin_framework feature is available"
           } else {
@@ -336,16 +410,34 @@ jobs:
               Write-Host "This will prevent plugins from working!"
           }
           
-          # Check Rust version compatibility
-          Write-Host "Checking Rust version compatibility..."
-          rustc --version
-          cargo --version
+          # Force dependency update to compatible versions
+          Write-Host "=== 强制更新依赖到兼容版本 ==="
+          Write-Host "Running cargo update --aggressive..."
+          cargo update --aggressive
           
-          # Try to update dependencies to compatible versions
-          Write-Host "Updating dependencies to compatible versions..."
-          cargo update
+          # Pin problematic dependencies to compatible versions
+          Write-Host "=== 锁定问题依赖到兼容版本 ==="
+          
+          # Try to pin rayon-core to a compatible version
+          Write-Host "Attempting to pin rayon-core to compatible version..."
+          try {
+              cargo update rayon-core --precise 1.12.1
+              Write-Host "✅ Successfully pinned rayon-core to 1.12.1"
+          } catch {
+              Write-Host "⚠️  Could not pin rayon-core, will use latest compatible version"
+          }
+          
+          # Try to pin zerotrie to a compatible version
+          Write-Host "Attempting to pin zerotrie to compatible version..."
+          try {
+              cargo update zerotrie --precise 0.2.1
+              Write-Host "✅ Successfully pinned zerotrie to 0.2.1"
+          } catch {
+              Write-Host "⚠️  Could not pin zerotrie, will use latest compatible version"
+          }
           
           # Force clean build
+          Write-Host "=== 开始构建插件 ==="
           Write-Host "Building plugin with clean environment..."
           cargo build --release --package rd_ui_plugin --verbose
           
@@ -430,7 +522,7 @@ jobs:
       - name: Create build info
         run: |
           Write-Host "=== 创建构建信息文件 (V3) ==="
-          $buildInfo = "RustDesk Plugin Build - V3 (缓存清理版)`n构建时间: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`nGit提交: ${{ github.sha }}`n工作流: ${{ github.workflow }}`n分支: ${{ github.ref_name }}`n插件: rd_ui_plugin`n插件系统: 已启用 (plugin_framework)`n特性: flutter,plugin_framework`n缓存清理: 强制清理所有缓存`n版本: V3 - 避免编译器缓存问题`n支持: 全屏控制、尺寸调整、工具栏隐藏"
+          $buildInfo = "RustDesk Plugin Build - V3 (Rust版本修复版)`n构建时间: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`nGit提交: ${{ github.sha }}`n工作流: ${{ github.workflow }}`n分支: ${{ github.ref_name }}`n插件: rd_ui_plugin`n插件系统: 已启用 (plugin_framework)`n特性: flutter,plugin_framework`nRust版本: 1.82 (强制验证)`n依赖版本: 自动锁定到兼容版本`n缓存清理: 强制清理所有缓存`n版本: V3-Rust-Fixed - 解决Rust版本兼容性问题`n支持: 全屏控制、尺寸调整、工具栏隐藏"
           Set-Content -Path ".\rustdesk\BUILD_INFO.txt" -Value $buildInfo -Encoding UTF8
 
       - name: Upload RustDesk.exe
