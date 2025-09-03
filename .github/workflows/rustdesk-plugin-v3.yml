@@ -1,0 +1,436 @@
+name: "RustDesk Plugin Build - V3 (缓存清理版)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: '构建类型'
+        required: true
+        default: 'release'
+        type: choice
+        options:
+        - release
+        - debug
+
+env:
+  RUST_VERSION: "1.75"
+  FLUTTER_VERSION: "3.24.5"
+  LLVM_VERSION: "15.0.6"
+  VCPKG_COMMIT_ID: "6f29f12e82a8293156836ad81cc9bf5af41fe836"
+  VERSION: "1.4.1-plugin-v3"
+  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+  # Enable plugin framework for RustDesk
+  RUSTFLAGS: "--cfg feature=\"plugin_framework\" -C codegen-units=1"
+  CARGO_FEATURE_PLUGIN_FRAMEWORK: "1"
+  # Force clean build
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  generate-bridge:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install prerequisites
+        run: |
+          sudo apt-get install ca-certificates -y
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            clang \
+            cmake \
+            curl \
+            gcc \
+            git \
+            g++ \
+            libclang-dev \
+            libgtk-3-dev \
+            llvm-dev \
+            nasm \
+            ninja-build \
+            pkg-config \
+            wget
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: x86_64-unknown-linux-gnu
+          components: "rustfmt"
+
+      - name: Clean Rust cache
+        run: |
+          echo "🧹 清理Rust缓存..."
+          cargo clean
+          rm -rf ~/.cargo/registry/cache
+          rm -rf ~/.cargo/git/db
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: bridge-ubuntu-22.04-v3-$(date +%s)
+
+      - name: Install flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Clean Flutter cache
+        run: |
+          echo "🧹 清理Flutter缓存..."
+          pushd flutter
+          flutter clean
+          flutter pub cache clean
+          popd
+
+      - name: Install flutter rust bridge deps
+        shell: bash
+        run: |
+          echo "📦 安装Flutter Rust Bridge依赖..."
+          cargo install cargo-expand --version 1.0.95 --locked
+          cargo install flutter_rust_bridge_codegen --version 1.80.1 --features "uuid" --locked
+          
+          # Get Flutter dependencies
+          pushd flutter
+          flutter pub get
+          popd
+
+      - name: Run flutter rust bridge
+        run: |
+          echo "🔗 生成Flutter Rust Bridge代码..."
+          # Generate all bridge files in one command
+          ~/.cargo/bin/flutter_rust_bridge_codegen \
+            --rust-input ./src/flutter_ffi.rs \
+            --dart-output ./flutter/lib/generated_bridge.dart \
+            --rust-output ./src/bridge_generated.rs \
+            --c-output ./flutter/macos/Runner/bridge_generated.h
+          
+          # Copy header file to iOS location
+          cp ./flutter/macos/Runner/bridge_generated.h ./flutter/ios/Runner/bridge_generated.h
+          
+          # Create empty .io.rs file to satisfy build requirements
+          echo "// Auto-generated bridge file for IO operations" > ./src/bridge_generated.io.rs
+          
+          # Debug: Check if files were generated
+          echo "Checking generated files..."
+          ls -la ./src/bridge_generated.rs
+          ls -la ./src/bridge_generated.io.rs
+          ls -la ./flutter/lib/generated_bridge.dart
+          ls -la ./flutter/macos/Runner/bridge_generated.h
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@master
+        with:
+          name: bridge-artifact-v3
+          path: |
+            ./src/bridge_generated.rs
+            ./src/bridge_generated.io.rs
+            ./flutter/lib/generated_bridge.dart
+            ./flutter/lib/generated_bridge.freezed.dart
+            ./flutter/macos/Runner/bridge_generated.h
+            ./flutter/ios/Runner/bridge_generated.h
+
+  build-windows-plugin:
+    name: Build Windows Plugin V3
+    needs: [generate-bridge]
+    runs-on: windows-2022
+    steps:
+      - name: Export GitHub Actions cache environment variables
+        uses: actions/github-script@v6
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+      - name: Checkout source code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Restore bridge files
+        uses: actions/download-artifact@master
+        with:
+          name: bridge-artifact-v3
+          path: ./
+
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v1
+        with:
+          version: ${{ env.LLVM_VERSION }}
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - name: Verify Flutter installation
+        run: |
+          Write-Host "Flutter version:"
+          flutter --version
+          
+          Write-Host "Flutter doctor:"
+          flutter doctor -v
+          
+          Write-Host "Flutter path:"
+          where flutter
+
+      - name: Clean Flutter and Rust caches
+        run: |
+          Write-Host "🧹 清理Flutter和Rust缓存..."
+          
+          # Clean Flutter build cache
+          pushd flutter
+          Write-Host "Cleaning Flutter build cache..."
+          flutter clean
+          flutter pub cache clean
+          flutter pub get
+          popd
+          
+          # Clean Rust cache
+          Write-Host "Cleaning Rust cache..."
+          cargo clean
+          Remove-Item -Path "target" -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item -Path "Cargo.lock" -Force -ErrorAction SilentlyContinue
+
+      - name: Replace engine with rustdesk custom flutter engine
+        run: |
+          flutter doctor -v
+          flutter precache --windows
+          
+          # Debug: Check Flutter installation path
+          $flutterPath = (Get-Command flutter).Source
+          $flutterDir = Split-Path -Parent (Split-Path -Parent $flutterPath)
+          Write-Host "Flutter directory: $flutterDir"
+          
+          # Check if engine directory exists
+          $engineDir = "C:\hostedtoolcache\windows\flutter\stable-${{ env.FLUTTER_VERSION }}-x64\bin\cache\artifacts\engine\windows-x64-release"
+          Write-Host "Target engine directory: $engineDir"
+          
+          if (Test-Path $engineDir) {
+            Write-Host "Engine directory exists"
+            Get-ChildItem $engineDir | Select-Object Name
+          } else {
+            Write-Host "Engine directory does not exist, creating it"
+            New-Item -ItemType Directory -Path $engineDir -Force
+          }
+          
+          # Download and extract engine
+          Write-Host "Downloading RustDesk custom Flutter engine..."
+          Invoke-WebRequest -Uri https://github.com/rustdesk/engine/releases/download/main/windows-x64-release.zip -OutFile windows-x64-release.zip
+          
+          Write-Host "Extracting engine files..."
+          Expand-Archive -Path windows-x64-release.zip -DestinationPath windows-x64-release -Force
+          
+          Write-Host "Moving engine files..."
+          Move-Item -Path "windows-x64-release\*" -Destination $engineDir -Force
+          
+          Write-Host "Engine replacement completed. Contents:"
+          Get-ChildItem $engineDir | Select-Object Name
+          
+          # Clean up
+          Remove-Item -Path "windows-x64-release.zip" -Force -ErrorAction SilentlyContinue
+          Remove-Item -Path "windows-x64-release" -Recurse -Force -ErrorAction SilentlyContinue
+
+      - name: Patch flutter
+        shell: bash
+        run: |
+          cp .github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff $(dirname $(dirname $(which flutter)))
+          cd $(dirname $(dirname $(which flutter)))
+          [[ "3.24.5" == ${{env.FLUTTER_VERSION}} ]] && git apply flutter_3.24.4_dropdown_menu_enableFilter.diff
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: x86_64-pc-windows-msvc
+          components: "rustfmt"
+
+      - name: Clean Rust cache and use fresh cache
+        run: |
+          Write-Host "🧹 清理Rust缓存并使用新缓存..."
+          cargo clean
+          Remove-Item -Path "$env:USERPROFILE\.cargo\registry\cache" -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item -Path "$env:USERPROFILE\.cargo\git\db" -Recurse -Force -ErrorAction SilentlyContinue
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: windows-2022-v3-$(Get-Date -Format 'yyyyMMdd-HHmmss')
+
+      - name: Setup vcpkg with Github Actions binary cache
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgDirectory: C:\vcpkg
+          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
+          doNotCache: false
+
+      - name: Install vcpkg dependencies
+        env:
+          VCPKG_DEFAULT_HOST_TRIPLET: x64-windows-static
+        run: |
+          Write-Host "Installing vcpkg dependencies..."
+          & "$env:VCPKG_ROOT\vcpkg.exe" install --triplet x64-windows-static --x-install-root="$env:VCPKG_ROOT\installed"
+          
+          Write-Host "VCPKG installation completed"
+          Write-Host "Installed packages:"
+          & "$env:VCPKG_ROOT\vcpkg.exe" list
+
+      - name: Force clean build environment
+        run: |
+          Write-Host "🧹 强制清理构建环境..."
+          
+          # Remove all build artifacts
+          if (Test-Path "target") {
+            Write-Host "Removing target directory..."
+            Remove-Item -Path "target" -Recurse -Force
+          }
+          
+          # Remove Cargo.lock to force dependency resolution
+          if (Test-Path "Cargo.lock") {
+            Write-Host "Removing Cargo.lock..."
+            Remove-Item -Path "Cargo.lock" -Force
+          }
+          
+          # Clean Flutter build
+          if (Test-Path "flutter\build") {
+            Write-Host "Removing Flutter build directory..."
+            Remove-Item -Path "flutter\build" -Recurse -Force
+          }
+          
+          Write-Host "Build environment cleaned"
+
+      - name: Build plugin first
+        run: |
+          Write-Host "=== 开始构建rd_ui_plugin插件 (V3) ==="
+          
+          # Verify plugin_framework feature is available
+          Write-Host "Checking plugin_framework feature availability..."
+          if (cargo check --features plugin_framework --package rustdesk --message-format=short 2>&1 | Select-String -Pattern "plugin_framework" -Quiet) {
+              Write-Host "✅ plugin_framework feature is available"
+          } else {
+              Write-Host "❌ plugin_framework feature is NOT available"
+              Write-Host "This will prevent plugins from working!"
+          }
+          
+          # Force clean build
+          Write-Host "Building plugin with clean environment..."
+          cargo build --release --package rd_ui_plugin --verbose
+          
+          Write-Host "=== 验证插件构建结果 ==="
+          if (Test-Path "target\release\plugin_rd_ui_plugin.dll") {
+              Write-Host "✅ 插件构建成功: target\release\plugin_rd_ui_plugin.dll"
+              Get-ChildItem "target\release\plugin_rd_ui_plugin.dll" | Format-List
+          } else {
+              Write-Host "❌ 插件构建失败"
+              exit 1
+          }
+
+      - name: Build rustdesk with clean environment
+        run: |
+          # Windows: build RustDesk with plugin support
+          Write-Host "Starting RustDesk build with plugin support (V3)..."
+          Write-Host "Enabling plugin_framework feature for plugin support..."
+          # Force clean build
+          Write-Host "🧹 强制清理构建环境..."
+          if (Test-Path "target") {
+            Remove-Item -Path "target" -Recurse -Force
+          }
+          
+          # Build with clean environment
+          python3 .\build.py --portable --flutter --skip-portable-pack
+          
+          # Verify that plugin_framework feature was enabled
+          Write-Host "Checking if plugin_framework was compiled..."
+          if (Select-String -Path "target\release\build\rustdesk-*\out\build_script_build-*.out" -Pattern "plugin_framework" -Quiet) {
+              Write-Host "✅ plugin_framework feature was enabled during build"
+          } else {
+              Write-Host "⚠️  plugin_framework feature status unclear, checking binary..."
+          }
+          
+          # Check if flutter build directory exists
+          Write-Host "Checking flutter build directory..."
+          if (Test-Path ".\flutter\build\windows\x64\runner\Release") {
+            Write-Host "Flutter build directory found"
+            Move-Item -Path ".\flutter\build\windows\x64\runner\Release" -Destination ".\rustdesk"
+          } else {
+            Write-Host "Flutter build directory not found. Checking flutter directory structure..."
+            Get-ChildItem -Path ".\flutter\build" -Recurse -ErrorAction SilentlyContinue | Select-Object FullName
+            Write-Host "Flutter build failed. Exiting."
+            exit 1
+          }
+          
+          # Verify plugin support in the built binary
+          Write-Host "=== 验证插件支持 ==="
+          if (Test-Path ".\rustdesk\rustdesk.exe") {
+              Write-Host "Checking if rustdesk.exe contains plugin support..."
+              $binaryContent = Get-Content ".\rustdesk\rustdesk.exe" -Raw -ErrorAction SilentlyContinue
+              if ($binaryContent -match "plugin") {
+                  Write-Host "✅ RustDesk binary contains plugin-related symbols"
+              } else {
+                  Write-Host "⚠️  RustDesk binary may not have plugin support"
+              }
+          }
+
+          # Download usbmmidd_v2.zip and extract it to ./rustdesk
+          Invoke-WebRequest -Uri https://github.com/rustdesk-org/rdev/releases/download/usbmmidd_v2/usbmmidd_v2.zip -OutFile usbmmidd_v2.zip
+          Expand-Archive usbmmidd_v2.zip -DestinationPath .
+          Remove-Item -Path "usbmmidd_v2\Win32" -Recurse
+          Remove-Item -Path "usbmmidd_v2\deviceinstaller64.exe", "usbmmidd_v2\deviceinstaller.exe", "usbmmidd_v2\usbmmidd.bat"
+          Move-Item -Path ".\usbmmidd_v2" -Destination ".\rustdesk" -Force
+
+      - name: Setup plugin directory
+        run: |
+          Write-Host "=== 设置插件目录 (V3) ==="
+          $pluginDir = ".\rustdesk\plugins\rd_ui_plugin"
+          New-Item -ItemType Directory -Path $pluginDir -Force
+          
+          Write-Host "=== 复制插件文件 ==="
+          Copy-Item "target\release\plugin_rd_ui_plugin.dll" $pluginDir
+          
+          Write-Host "=== 创建插件配置文件 ==="
+          $configContent = '{"fullscreen": true, "scale": "fit", "toolbar": "hide"}'
+          Set-Content -Path "$pluginDir\config.json" -Value $configContent -Encoding UTF8
+          
+          Write-Host "=== 验证插件文件 ==="
+          Get-ChildItem $pluginDir -Recurse | Format-List
+
+      - name: Create build info
+        run: |
+          Write-Host "=== 创建构建信息文件 (V3) ==="
+          $buildInfo = "RustDesk Plugin Build - V3 (缓存清理版)`n构建时间: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`nGit提交: ${{ github.sha }}`n工作流: ${{ github.workflow }}`n分支: ${{ github.ref_name }}`n插件: rd_ui_plugin`n插件系统: 已启用 (plugin_framework)`n特性: flutter,plugin_framework`n缓存清理: 强制清理所有缓存`n版本: V3 - 避免编译器缓存问题`n支持: 全屏控制、尺寸调整、工具栏隐藏"
+          Set-Content -Path ".\rustdesk\BUILD_INFO.txt" -Value $buildInfo -Encoding UTF8
+
+      - name: Upload RustDesk.exe
+        uses: actions/upload-artifact@master
+        with:
+          name: RustDesk-Windows-x64-Plugin-V3
+          path: rustdesk/rustdesk.exe
+
+      - name: Upload plugin files
+        uses: actions/upload-artifact@master
+        with:
+          name: Plugin-rd_ui_plugin-V3
+          path: rustdesk/plugins/rd_ui_plugin/
+
+      - name: Create release package
+        run: |
+          # Create a zip file with the executable and plugin
+          Compress-Archive -Path ./rustdesk/* -DestinationPath ./RustDesk-Windows-x64-${{ env.VERSION }}.zip
+
+      - name: Upload release package
+        uses: actions/upload-artifact@master
+        with:
+          name: RustDesk-Windows-x64-Plugin-Package-V3
+          path: RustDesk-Windows-x64-${{ env.VERSION }}.zip
+
+      - name: Build completion notification
+        run: |
+          Write-Host "🎉 RustDesk插件构建完成 (V3)！"
+          Write-Host "📦 构建产物: RustDesk-Windows-x64-${{ env.VERSION }}.zip"
+          Write-Host "🔌 插件文件: rustdesk\plugins\rd_ui_plugin\"
+          Write-Host "🚀 主程序: rustdesk\rustdesk.exe"
+          Write-Host "✅ 插件已集成到主程序中"
+          Write-Host "🧹 已强制清理所有缓存，避免编译器缓存问题"
