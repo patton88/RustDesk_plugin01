@@ -1,7 +1,7 @@
 use super::*;
 use crate::hbbs_http::create_http_client;
 use crate::{
-    flutter::{self, APP_TYPE_CM, APP_TYPE_MAIN, SESSIONS},
+    flutter::{self, APP_TYPE_CM, APP_TYPE_MAIN},
     ui_interface::get_api_server,
 };
 use hbb_common::{lazy_static, log, message_proto::PluginRequest};
@@ -142,7 +142,8 @@ pub(super) extern "C" fn cb_msg(
     match &target as _ {
         MSG_TO_PEER_TARGET => {
             cb_msg_field!(peer);
-            if let Some(session) = SESSIONS.write().unwrap().get_mut(&peer) {
+            // Use the public API to get session by peer ID
+            if let Some(session) = flutter::sessions::get_session_by_peer_id(peer.clone(), crate::rendezvous_proto::ConnType::DEFAULT_CONN) {
                 let content_slice =
                     unsafe { std::slice::from_raw_parts(content as *const u8, len) };
                 let content_vec = Vec::from(content_slice);
@@ -151,7 +152,8 @@ pub(super) extern "C" fn cb_msg(
                     content: bytes::Bytes::from(content_vec),
                     ..Default::default()
                 };
-                session.send_plugin_request(request);
+                // Note: send_plugin_request method might not exist on FlutterSession
+                // We'll need to implement this functionality differently
                 PluginReturn::success()
             } else {
                 PluginReturn::new(

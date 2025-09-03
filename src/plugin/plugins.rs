@@ -628,7 +628,8 @@ fn reload_ui(desc: &Desc, sync_to: Option<&str>) {
                     // The second element is the "main", "remote", "cm", "file transfer", "port forward".
                     if v.len() >= 2 {
                         let available_channels = flutter::get_global_event_channels();
-                        if available_channels.contains(&v[1].to_string()) {
+                        let channel_str = v[1].to_string();
+                        if available_channels.contains(&channel_str) {
                             let _res = flutter::push_global_event(v[1], make_event(&ui));
                         }
                     }
