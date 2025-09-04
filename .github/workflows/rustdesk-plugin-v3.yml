@@ -1,4 +1,4 @@
-name: "RustDesk Plugin Build - V3 (Edition2024兼容性修复版V3 - 智能降级策略)"
+name: "RustDesk Plugin Build - V3 (Edition2024兼容性修复版V4 - 强制版本锁定策略)"
 
 on:
   workflow_dispatch:
@@ -17,7 +17,7 @@ env:
   FLUTTER_VERSION: "3.24.5"
   LLVM_VERSION: "15.0.6"
   VCPKG_COMMIT_ID: "6f29f12e82a8293156836ad81cc9bf5af41fe836"
-  VERSION: "1.4.1-plugin-v3-edition-fixed-v3"
+  VERSION: "1.4.1-plugin-v3-edition-fixed-v4"
   VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
   # Enable plugin framework for RustDesk
   RUSTFLAGS: '--cfg feature="plugin_framework" -C codegen-units=1'
@@ -368,10 +368,10 @@ jobs:
               Write-Host "Found zerotrie dependency, will be handled by cargo update"
             }
             
-                         # Check for rayon-core
-             if ($content -match "rayon-core") {
-               Write-Host "Found rayon-core dependency, will be handled by cargo update"
-             }
+            # Check for rayon-core
+            if ($content -match "rayon-core") {
+              Write-Host "Found rayon-core dependency, will be handled by cargo update"
+            }
              
              # Check for moxcms
              if ($content -match "moxcms") {
@@ -400,20 +400,46 @@ jobs:
           # Create a Cargo.toml override to force compatible versions
           if (Test-Path "Cargo.toml") {
               Write-Host "Creating Cargo.toml override for edition2024 compatibility..."
-              $overrideContent = "[patch.crates-io]`nmoxcms = { version = `"=0.7.3`", default-features = false }`npxfm = { version = `"=0.1.19`", default-features = false }"
-              $overrideContent | Out-File -FilePath "Cargo.toml.override" -Encoding UTF8
+              # Write primary override file directly
+              Set-Content -FilePath "Cargo.toml.override" -Value "[patch.crates-io]`nmoxcms = { version = `"=0.7.3`", default-features = false }`npxfm = { version = `"=0.1.19`", default-features = false }" -Encoding UTF8
               Write-Host "✅ Created Cargo.toml.override with edition2024-compatible versions"
               
               # Also create a more aggressive override file for fallback
               Write-Host "Creating aggressive Cargo.toml override for maximum compatibility..."
-              $aggressiveOverride = "[patch.crates-io]`nmoxcms = { version = `"=0.7.2`", default-features = false }`npxfm = { version = `"=0.1.18`", default-features = false }"
-              $aggressiveOverride | Out-File -FilePath "Cargo.toml.override.aggressive" -Encoding UTF8
+              # Write aggressive override file directly
+              Set-Content -FilePath "Cargo.toml.override.aggressive" -Value "[patch.crates-io]`nmoxcms = { version = `"=0.7.2`", default-features = false }`npxfm = { version = `"=0.1.18`", default-features = false }" -Encoding UTF8
               Write-Host "✅ Created aggressive Cargo.toml.override.aggressive with fallback versions"
+              
+              # Create a more restrictive override that blocks problematic versions
+              Write-Host "Creating restrictive override to block problematic versions..."
+              # Write restrictive override file directly
+              Set-Content -FilePath "Cargo.toml.override.restrictive" -Value "[patch.crates-io]`nmoxcms = { version = `"=0.7.3`", default-features = false }`npxfm = { version = `"=0.1.19`", default-features = false }`n`n[patch.crates-io.moxcms]`nversion = `"=0.7.3`"`n`n[patch.crates-io.pxfm]`nversion = `"=0.1.19`"" -Encoding UTF8
+              Write-Host "✅ Created restrictive Cargo.toml.override.restrictive"
           }
 
       - name: Build plugin first
         run: |
           Write-Host "=== 开始构建rd_ui_plugin插件 (V3) ==="
+          
+          # Force clean dependency cache to ensure version locking works
+          Write-Host "=== 强制清理依赖缓存确保版本锁定生效 ==="
+          Write-Host "Removing problematic dependency versions from cache..."
+          
+          # Force remove problematic versions from cargo cache
+          try {
+              # Remove specific problematic versions from cargo cache
+              $cargoCacheDir = "$env:USERPROFILE\.cargo\registry\src\index.crates.io-6f17d22bba15001f"
+              if (Test-Path "$cargoCacheDir\moxcms-0.7.5") {
+                  Remove-Item -Path "$cargoCacheDir\moxcms-0.7.5" -Recurse -Force
+                  Write-Host "✅ Removed moxcms-0.7.5 from cache"
+              }
+              if (Test-Path "$cargoCacheDir\pxfm-0.1.20") {
+                  Remove-Item -Path "$cargoCacheDir\pxfm-0.1.20" -Recurse -Force
+                  Write-Host "✅ Removed pxfm-0.1.20 from cache"
+              }
+          } catch {
+              Write-Host "⚠️  Could not remove problematic versions from cache"
+          }
           
           # Force Rust version verification
           Write-Host "=== 强制验证Rust版本 ==="
@@ -504,6 +530,14 @@ jobs:
           
           # Try primary version first
           Write-Host "Attempting build with primary dependency versions..."
+          
+          # Force apply restrictive override first
+          Write-Host "Applying restrictive dependency override..."
+          if (Test-Path "Cargo.toml.override.restrictive") {
+              Copy-Item "Cargo.toml.override.restrictive" "Cargo.toml.override" -Force
+              Write-Host "✅ Applied restrictive dependency override"
+          }
+          
           $buildSuccess = $false
           
           try {
@@ -621,7 +655,7 @@ jobs:
       - name: Create build info
         run: |
           Write-Host "=== 创建构建信息文件 (V3) ==="
-          $buildInfo = "RustDesk Plugin Build - V3 (Edition2024兼容性修复版V3 - 智能降级策略)`n构建时间: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`nGit提交: ${{ github.sha }}`n工作流: ${{ github.workflow }}`n分支: ${{ github.ref_name }}`n插件: rd_ui_plugin`n插件系统: 已启用 (plugin_framework)`n特性: flutter,plugin_framework`nRust版本: 1.82 (智能版本比较)`n依赖版本: 自动锁定到兼容版本`nEdition2024兼容性: 智能降级策略 (moxcms:0.7.3→0.7.2, pxfm:0.1.19→0.1.18)`n缓存清理: 强制清理所有缓存`n版本: V3-Edition-Fixed-V3 - 智能依赖降级策略`n支持: 全屏控制、尺寸调整、工具栏隐藏"
+          $buildInfo = "RustDesk Plugin Build - V3 (Edition2024兼容性修复版V4 - 强制版本锁定策略)`n构建时间: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`nGit提交: ${{ github.sha }}`n工作流: ${{ github.workflow }}`n分支: ${{ github.ref_name }}`n插件: rd_ui_plugin`n插件系统: 已启用 (plugin_framework)`n特性: flutter,plugin_framework`nRust版本: 1.82 (智能版本比较)`n依赖版本: 强制锁定到兼容版本`nEdition2024兼容性: 强制版本锁定策略 (moxcms:0.7.3, pxfm:0.1.19)`n缓存清理: 强制清理问题版本缓存`n版本: V3-Edition-Fixed-V4 - 强制依赖版本锁定策略`n支持: 全屏控制、尺寸调整、工具栏隐藏"
           Set-Content -Path ".\rustdesk\BUILD_INFO.txt" -Value $buildInfo -Encoding UTF8
 
       - name: Upload RustDesk.exe
