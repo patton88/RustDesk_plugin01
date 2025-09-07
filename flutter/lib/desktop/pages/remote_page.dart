@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/material.dart';
@@ -162,7 +163,10 @@ class _RemotePageState extends State<RemotePage>
           ', desktop_scaling='+
           desktopScaling.toString();
       debugPrint(logLine);
-      // 仅保留必要 CLI 应用的调试输出到控制台
+      // 写入调试文件，便于排查命令行参数生效情况
+      try {
+        File('debug.txt').writeAsStringSync(logLine + '\n', mode: FileMode.append);
+      } catch (_) {}
 
       // 1) 全屏：确保窗口已显示/聚焦后再设为全屏，并做一次重试
       if (fullscreen) {
