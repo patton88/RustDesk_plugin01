@@ -204,7 +204,21 @@ class _RemotePageState extends State<RemotePage>
           await bind.sessionToggleOption(
               sessionId: sessionId, value: kOptionCollapseToolbar);
         }
+        // 立即同步本地 UI 状态，避免时序导致初始一瞬间显示
         widget.toolbarState.initShow(sessionId);
+        widget.toolbarState.show.value = !wantCollapsed;
+        // 再次确认一次服务端选项，必要时二次校正
+        Future.delayed(const Duration(milliseconds: 400), () async {
+          try {
+            final latest = await bind.sessionGetToggleOption(
+                sessionId: sessionId, arg: kOptionCollapseToolbar);
+            if ((latest ?? false) != wantCollapsed) {
+              await bind.sessionToggleOption(
+                  sessionId: sessionId, value: kOptionCollapseToolbar);
+            }
+            widget.toolbarState.show.value = !wantCollapsed;
+          } catch (_) {}
+        });
       } catch (_) {}
 
       // 3) 桌面缩放：original=原始尺寸，adaptive=自适应
