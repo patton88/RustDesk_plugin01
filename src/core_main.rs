@@ -49,6 +49,7 @@ pub fn core_main() -> Option<Vec<String>> {
     let mut fullscreen_arg: Option<bool> = None;
     let mut collapse_toolbar_arg: Option<bool> = None;
     let mut desktop_scaling_arg: Option<bool> = None;
+    let mut debug_log_arg: Option<bool> = None;
     for arg in std::env::args() {
         if i == 0 {
             arg_exe = arg;
@@ -89,6 +90,11 @@ pub fn core_main() -> Option<Vec<String>> {
                 let value = &arg[18..]; // 跳过 "--desktop_scaling="
                 desktop_scaling_arg = Some(value == "true");
                 log::info!("命令行参数解析: desktop_scaling={}", value);
+            } else if arg.starts_with("--debug_log=") {
+                // 解析 --debug_log=true/false 参数
+                let value = &arg[12..];
+                debug_log_arg = Some(value == "true");
+                log::info!("命令行参数解析: debug_log={}", value);
             } else {
                 args.push(arg);
             }
@@ -633,6 +639,9 @@ pub fn core_main() -> Option<Vec<String>> {
     if let Some(desktop_scaling) = desktop_scaling_arg {
         flutter_args.push(format!("--desktop_scaling={}", desktop_scaling));
         std::env::set_var("RUSTDESK_CLI_DESKTOP_SCALING", if desktop_scaling {"true"} else {"false"});
+    }
+    if let Some(debug_log) = debug_log_arg {
+        flutter_args.push(format!("--debug_log={}", debug_log));
     }
     
     #[cfg(feature = "flutter")]

@@ -27,8 +27,6 @@ use std::{
         Arc,
     },
     time::{Duration, SystemTime},
-    fs::OpenOptions,
-    io::Write,
 };
 
 pub type SessionID = uuid::Uuid;
@@ -37,23 +35,7 @@ lazy_static::lazy_static! {
     static ref TEXTURE_RENDER_KEY: Arc<AtomicI32> = Arc::new(AtomicI32::new(0));
 }
 
-// 调试输出函数
-fn debug_output(message: &str) {
-    if let Ok(mut file) = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("debug.txt")
-    {
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-        let _ = writeln!(file, "[{}] {}", timestamp, message);
-    }
-}
-
 fn initialize(app_dir: &str, custom_client_config: &str) {
-    debug_output(&format!("Flutter FFI 初始化开始: app_dir={}", app_dir));
     flutter::async_tasks::start_flutter_async_runner();
     *config::APP_DIR.write().unwrap() = app_dir.to_owned();
     // core_main's load_custom_client does not work for flutter since it is only applied to its load_library in main.c

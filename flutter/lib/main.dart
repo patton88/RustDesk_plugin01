@@ -51,6 +51,7 @@ Future<void> main(List<String> args) async {
   bool fullscreenMode = false;
   bool collapseToolbar = false;
   bool desktopScaling = false;
+  bool debugLog = false;
   
   for (String arg in args) {
     if (arg.startsWith('--fullscreen=')) {
@@ -62,6 +63,9 @@ Future<void> main(List<String> args) async {
     } else if (arg.startsWith('--desktop_scaling=')) {
       desktopScaling = arg.substring(18) == 'true';
       debugPrint("命令行参数: desktop_scaling=$desktopScaling");
+    } else if (arg.startsWith('--debug_log=')) {
+      debugLog = arg.substring(12) == 'true';
+      debugPrint("命令行参数: debug_log=$debugLog");
     }
   }
   
@@ -70,6 +74,7 @@ Future<void> main(List<String> args) async {
     'fullscreen': fullscreenMode,
     'collapse_toolbar': collapseToolbar,
     'desktop_scaling': desktopScaling,
+    'debug_log': debugLog,
   };
 
   // 兜底：从环境变量读取（Rust 侧已在 core_main 设置）

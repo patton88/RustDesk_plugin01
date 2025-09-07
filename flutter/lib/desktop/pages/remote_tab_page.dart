@@ -97,6 +97,7 @@ class _ConnectionTabPageState extends State<ConnectionTabPage> {
           cliFullscreen: params['cli_fullscreen'] == true,
           cliCollapseToolbar: params['cli_collapse_toolbar'] == true,
           cliDesktopScaling: params['cli_desktop_scaling'] == true,
+          cliDebugLog: params['cli_debug_log'] == true,
           // propagate CLI flags from parent args when present
           // ignore: invalid_assignment
           // (Dart will drop extra named args silently if constructor not defined, so ensure it exists)

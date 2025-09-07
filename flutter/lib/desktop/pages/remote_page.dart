@@ -50,6 +50,7 @@ class RemotePage extends StatefulWidget {
     this.cliFullscreen,
     this.cliCollapseToolbar,
     this.cliDesktopScaling,
+    this.cliDebugLog,
   }) : super(key: key) {
     initSharedStates(id);
   }
@@ -68,6 +69,7 @@ class RemotePage extends StatefulWidget {
   final bool? cliFullscreen;
   final bool? cliCollapseToolbar;
   final bool? cliDesktopScaling;
+  final bool? cliDebugLog;
   final SimpleWrapper<State<RemotePage>?> _lastState = SimpleWrapper(null);
   final DesktopTabController? tabController;
 
@@ -154,6 +156,7 @@ class _RemotePageState extends State<RemotePage>
       bool desktopScaling = (widget.cliDesktopScaling ??
               (globalCommandLineArgs['desktop_scaling'] ?? false))
           as bool;
+      final bool debugLog = (widget.cliDebugLog ?? (globalCommandLineArgs['debug_log'] ?? false)) as bool;
       // 环境变量读取已移除，保持实现纯净
 
       final logLine = 'CLI apply: fullscreen='+
@@ -164,9 +167,12 @@ class _RemotePageState extends State<RemotePage>
           desktopScaling.toString();
       debugPrint(logLine);
       // 写入调试文件，便于排查命令行参数生效情况
-      try {
-        File('debug.txt').writeAsStringSync(logLine + '\n', mode: FileMode.append);
-      } catch (_) {}
+      if (debugLog) {
+        try {
+          File('RustDesk_debug.log')
+              .writeAsStringSync(logLine + '\n', mode: FileMode.append);
+        } catch (_) {}
+      }
 
       // 1) 全屏：确保窗口已显示/聚焦后再设为全屏，并做一次重试
       if (fullscreen) {

@@ -258,6 +258,7 @@ class RustDeskMultiWindowManager {
       params['cli_fullscreen'] = cliArgBool('fullscreen');
       params['cli_collapse_toolbar'] = cliArgBool('collapse_toolbar');
       params['cli_desktop_scaling'] = cliArgBool('desktop_scaling');
+      params['cli_debug_log'] = cliArgBool('debug_log');
     } catch (_) {}
     if (switchUuid != null) {
       params['switch_uuid'] = switchUuid;
