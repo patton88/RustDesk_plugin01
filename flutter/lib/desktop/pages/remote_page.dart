@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/material.dart';
@@ -154,18 +153,7 @@ class _RemotePageState extends State<RemotePage>
       bool desktopScaling = (widget.cliDesktopScaling ??
               (globalCommandLineArgs['desktop_scaling'] ?? false))
           as bool;
-      try {
-        final env = Platform.environment;
-        if (env.containsKey('RUSTDESK_CLI_FULLSCREEN')) {
-          fullscreen = env['RUSTDESK_CLI_FULLSCREEN']!.toLowerCase() == 'true' || fullscreen;
-        }
-        if (env.containsKey('RUSTDESK_CLI_COLLAPSE_TOOLBAR')) {
-          collapseToolbar = env['RUSTDESK_CLI_COLLAPSE_TOOLBAR']!.toLowerCase() == 'true' || collapseToolbar;
-        }
-        if (env.containsKey('RUSTDESK_CLI_DESKTOP_SCALING')) {
-          desktopScaling = env['RUSTDESK_CLI_DESKTOP_SCALING']!.toLowerCase() == 'true' || desktopScaling;
-        }
-      } catch (_) {}
+      // 环境变量读取已移除，保持实现纯净
 
       final logLine = 'CLI apply: fullscreen='+
           fullscreen.toString()+
@@ -174,9 +162,7 @@ class _RemotePageState extends State<RemotePage>
           ', desktop_scaling='+
           desktopScaling.toString();
       debugPrint(logLine);
-      try {
-        File('debug.txt').writeAsStringSync(logLine + '\n', mode: FileMode.append);
-      } catch (_) {}
+      // 仅保留必要 CLI 应用的调试输出到控制台
 
       // 1) 全屏：确保窗口已显示/聚焦后再设为全屏，并做一次重试
       if (fullscreen) {
