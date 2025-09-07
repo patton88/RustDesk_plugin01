@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/material.dart';
@@ -18,6 +19,8 @@ import '../../models/model.dart';
 import '../../models/platform_model.dart';
 import '../../common/shared_state.dart';
 import '../../utils/image.dart';
+import '../../common/cli_args.dart';
+import 'package:flutter_hbb/utils/multi_window_manager.dart';
 import '../widgets/remote_toolbar.dart';
 import '../widgets/kb_layout_type_chooser.dart';
 import '../widgets/tabbar_widget.dart';
@@ -44,6 +47,9 @@ class RemotePage extends StatefulWidget {
     this.switchUuid,
     this.forceRelay,
     this.isSharedPassword,
+    this.cliFullscreen,
+    this.cliCollapseToolbar,
+    this.cliDesktopScaling,
   }) : super(key: key) {
     initSharedStates(id);
   }
@@ -58,6 +64,10 @@ class RemotePage extends StatefulWidget {
   final String? switchUuid;
   final bool? forceRelay;
   final bool? isSharedPassword;
+  // CLI flags propagated via window arguments (optional)
+  final bool? cliFullscreen;
+  final bool? cliCollapseToolbar;
+  final bool? cliDesktopScaling;
   final SimpleWrapper<State<RemotePage>?> _lastState = SimpleWrapper(null);
   final DesktopTabController? tabController;
 
@@ -131,6 +141,80 @@ class _RemotePageState extends State<RemotePage>
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: []);
       _ffi.dialogManager
           .showLoading(translate('Connecting...'), onCancel: closeConnection);
+    });
+    // 一次性消费命令行参数：全屏 / 工具栏折叠 / 桌面缩放
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // 优先使用窗口参数传入，其次使用全局启动参数，最后兜底读取环境变量
+      bool fullscreen = (widget.cliFullscreen ??
+              (globalCommandLineArgs['fullscreen'] ?? false))
+          as bool;
+      bool collapseToolbar = (widget.cliCollapseToolbar ??
+              (globalCommandLineArgs['collapse_toolbar'] ?? false))
+          as bool;
+      bool desktopScaling = (widget.cliDesktopScaling ??
+              (globalCommandLineArgs['desktop_scaling'] ?? false))
+          as bool;
+      try {
+        final env = Platform.environment;
+        if (env.containsKey('RUSTDESK_CLI_FULLSCREEN')) {
+          fullscreen = env['RUSTDESK_CLI_FULLSCREEN']!.toLowerCase() == 'true' || fullscreen;
+        }
+        if (env.containsKey('RUSTDESK_CLI_COLLAPSE_TOOLBAR')) {
+          collapseToolbar = env['RUSTDESK_CLI_COLLAPSE_TOOLBAR']!.toLowerCase() == 'true' || collapseToolbar;
+        }
+        if (env.containsKey('RUSTDESK_CLI_DESKTOP_SCALING')) {
+          desktopScaling = env['RUSTDESK_CLI_DESKTOP_SCALING']!.toLowerCase() == 'true' || desktopScaling;
+        }
+      } catch (_) {}
+
+      final logLine = 'CLI apply: fullscreen='+
+          fullscreen.toString()+
+          ', collapse_toolbar='+
+          collapseToolbar.toString()+
+          ', desktop_scaling='+
+          desktopScaling.toString();
+      debugPrint(logLine);
+      try {
+        File('debug.txt').writeAsStringSync(logLine + '\n', mode: FileMode.append);
+      } catch (_) {}
+
+      // 1) 全屏：确保窗口已显示/聚焦后再设为全屏，并做一次重试
+      if (fullscreen) {
+        try {
+          final wc = WindowController.fromWindowId(stateGlobal.windowId);
+          await Future.delayed(const Duration(milliseconds: 200));
+          await wc.show();
+          await wc.focus();
+          stateGlobal.setFullscreen(true); // procWnd=true 让系统真正切换全屏
+          // 再次确认，若未生效，稍候重试一次
+          Future.delayed(const Duration(milliseconds: 800), () async {
+            try {
+              stateGlobal.setFullscreen(true);
+            } catch (_) {}
+          });
+        } catch (_) {}
+      }
+
+      // 2) 工具栏默认显隐（通过切换会话选项实现目标态）
+      try {
+        final curCollapsed = bind.sessionGetToggleOptionSync(
+            sessionId: sessionId, arg: kOptionCollapseToolbar);
+        final wantCollapsed = collapseToolbar;
+        if ((curCollapsed ?? false) != wantCollapsed) {
+          await bind.sessionToggleOption(
+              sessionId: sessionId, value: kOptionCollapseToolbar);
+        }
+        widget.toolbarState.initShow(sessionId);
+      } catch (_) {}
+
+      // 3) 桌面缩放：original=原始尺寸，adaptive=自适应
+      try {
+        final targetStyle =
+            desktopScaling ? kRemoteViewStyleAdaptive : kRemoteViewStyleOriginal;
+        await bind.sessionSetViewStyle(
+            sessionId: sessionId, value: targetStyle);
+        await _ffi.canvasModel.updateViewStyle();
+      } catch (_) {}
     });
     if (!isLinux) {
       WakelockPlus.enable();

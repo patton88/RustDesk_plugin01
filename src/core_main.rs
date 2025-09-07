@@ -44,6 +44,11 @@ pub fn core_main() -> Option<Vec<String>> {
     let mut _is_flutter_invoke_new_connection = false;
     let mut no_server = false;
     let mut arg_exe = Default::default();
+    
+    // 新增命令行参数变量
+    let mut fullscreen_arg: Option<bool> = None;
+    let mut collapse_toolbar_arg: Option<bool> = None;
+    let mut desktop_scaling_arg: Option<bool> = None;
     for arg in std::env::args() {
         if i == 0 {
             arg_exe = arg;
@@ -69,6 +74,21 @@ pub fn core_main() -> Option<Vec<String>> {
                 _is_quick_support = true;
             } else if arg == "--no-server" {
                 no_server = true;
+            } else if arg.starts_with("--fullscreen=") {
+                // 解析 --fullscreen=true/false 参数
+                let value = &arg[13..]; // 跳过 "--fullscreen="
+                fullscreen_arg = Some(value == "true");
+                log::info!("命令行参数解析: fullscreen={}", value);
+            } else if arg.starts_with("--collapse_toolbar=") {
+                // 解析 --collapse_toolbar=true/false 参数
+                let value = &arg[19..]; // 跳过 "--collapse_toolbar="
+                collapse_toolbar_arg = Some(value == "true");
+                log::info!("命令行参数解析: collapse_toolbar={}", value);
+            } else if arg.starts_with("--desktop_scaling=") {
+                // 解析 --desktop_scaling=true/false 参数
+                let value = &arg[18..]; // 跳过 "--desktop_scaling="
+                desktop_scaling_arg = Some(value == "true");
+                log::info!("命令行参数解析: desktop_scaling={}", value);
             } else {
                 args.push(arg);
             }
@@ -601,6 +621,20 @@ pub fn core_main() -> Option<Vec<String>> {
         }
     }
     //_async_logger_holder.map(|x| x.flush());
+    // 将命令行参数添加到Flutter参数中
+    if let Some(fullscreen) = fullscreen_arg {
+        flutter_args.push(format!("--fullscreen={}", fullscreen));
+        std::env::set_var("RUSTDESK_CLI_FULLSCREEN", if fullscreen {"true"} else {"false"});
+    }
+    if let Some(collapse_toolbar) = collapse_toolbar_arg {
+        flutter_args.push(format!("--collapse_toolbar={}", collapse_toolbar));
+        std::env::set_var("RUSTDESK_CLI_COLLAPSE_TOOLBAR", if collapse_toolbar {"true"} else {"false"});
+    }
+    if let Some(desktop_scaling) = desktop_scaling_arg {
+        flutter_args.push(format!("--desktop_scaling={}", desktop_scaling));
+        std::env::set_var("RUSTDESK_CLI_DESKTOP_SCALING", if desktop_scaling {"true"} else {"false"});
+    }
+    
     #[cfg(feature = "flutter")]
     return Some(flutter_args);
     #[cfg(not(feature = "flutter"))]
@@ -661,6 +695,10 @@ fn core_main_invoke_new_connection(mut args: std::env::Args) -> Option<Vec<Strin
     let mut authority = None;
     let mut id = None;
     let mut param_array = vec![];
+    // CLI flags for UI behavior
+    let mut fullscreen_arg: Option<bool> = None;
+    let mut collapse_toolbar_arg: Option<bool> = None;
+    let mut desktop_scaling_arg: Option<bool> = None;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--connect" | "--play" | "--file-transfer" | "--view-camera" | "--port-forward"
@@ -682,8 +720,37 @@ fn core_main_invoke_new_connection(mut args: std::env::Args) -> Option<Vec<Strin
                     param_array.push(format!("switch_uuid={switch_uuid}"));
                 }
             }
+            _ if arg.starts_with("--fullscreen=") => {
+                fullscreen_arg = Some(&arg[13..] == "true");
+            }
+            _ if arg.starts_with("--collapse_toolbar=") => {
+                collapse_toolbar_arg = Some(&arg[19..] == "true");
+            }
+            _ if arg.starts_with("--desktop_scaling=") => {
+                desktop_scaling_arg = Some(&arg[18..] == "true");
+            }
             _ => {}
         }
+    }
+    // Also export to environment so Flutter can read regardless of timing
+    if let Some(v) = fullscreen_arg {
+        std::env::set_var("RUSTDESK_CLI_FULLSCREEN", if v {"true"} else {"false"});
+    }
+    if let Some(v) = collapse_toolbar_arg {
+        std::env::set_var("RUSTDESK_CLI_COLLAPSE_TOOLBAR", if v {"true"} else {"false"});
+    }
+    if let Some(v) = desktop_scaling_arg {
+        std::env::set_var("RUSTDESK_CLI_DESKTOP_SCALING", if v {"true"} else {"false"});
+    }
+    // append UI behavior flags into uni-links query
+    if let Some(v) = fullscreen_arg {
+        param_array.push(format!("fullscreen={}", v));
+    }
+    if let Some(v) = collapse_toolbar_arg {
+        param_array.push(format!("collapse_toolbar={}", v));
+    }
+    if let Some(v) = desktop_scaling_arg {
+        param_array.push(format!("desktop_scaling={}", v));
     }
     let mut uni_links = Default::default();
     if let Some(authority) = authority {

@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:back_button_interceptor/back_button_interceptor.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
+import 'common/cli_args.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -2325,6 +2326,19 @@ List<String>? urlLinkToCmdArgs(Uri uri) {
 
   var queryParameters =
       uri.queryParameters.map((k, v) => MapEntry(k.toLowerCase(), v));
+  // Persist CLI-like flags into global storage for later consumption
+  try {
+    final fs = queryParameters["fullscreen"]?.toLowerCase() == 'true';
+    final ct = queryParameters["collapse_toolbar"]?.toLowerCase() == 'true';
+    final ds = queryParameters["desktop_scaling"]?.toLowerCase() == 'true';
+    if (queryParameters.containsKey('fullscreen') ||
+        queryParameters.containsKey('collapse_toolbar') ||
+        queryParameters.containsKey('desktop_scaling')) {
+      globalCommandLineArgs['fullscreen'] = fs;
+      globalCommandLineArgs['collapse_toolbar'] = ct;
+      globalCommandLineArgs['desktop_scaling'] = ds;
+    }
+  } catch (_) {}
 
   var key = queryParameters["key"];
   if (id != null) {
@@ -2368,6 +2382,16 @@ List<String>? urlLinkToCmdArgs(Uri uri) {
     String? switch_uuid = param["switch_uuid"];
     if (switch_uuid != null) args.addAll(['--switch_uuid', switch_uuid]);
     if (param["relay"] != null) args.add("--relay");
+    // pass through UI behavior flags so existing parsing can pick them up if needed
+    if (param.containsKey('fullscreen')) {
+      args.add('--fullscreen=${param['fullscreen']!.toLowerCase()}');
+    }
+    if (param.containsKey('collapse_toolbar')) {
+      args.add('--collapse_toolbar=${param['collapse_toolbar']!.toLowerCase()}');
+    }
+    if (param.containsKey('desktop_scaling')) {
+      args.add('--desktop_scaling=${param['desktop_scaling']!.toLowerCase()}');
+    }
     return args;
   }
 

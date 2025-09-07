@@ -26,6 +26,7 @@ import 'package:window_manager/window_manager.dart';
 import 'common.dart';
 import 'consts.dart';
 import 'mobile/pages/home_page.dart';
+import 'common/cli_args.dart';
 import 'mobile/pages/server_page.dart';
 import 'models/platform_model.dart';
 
@@ -37,12 +38,56 @@ int? kWindowId;
 WindowType? kWindowType;
 late List<String> kBootArgs;
 
+/// 全局命令行参数存储在 common/cli_args.dart
+
 Future<void> main(List<String> args) async {
   earlyAssert();
   WidgetsFlutterBinding.ensureInitialized();
 
   debugPrint("launch args: $args");
   kBootArgs = List.from(args);
+  
+  // 处理新增的命令行参数
+  bool fullscreenMode = false;
+  bool collapseToolbar = false;
+  bool desktopScaling = false;
+  
+  for (String arg in args) {
+    if (arg.startsWith('--fullscreen=')) {
+      fullscreenMode = arg.substring(13) == 'true';
+      debugPrint("命令行参数: fullscreen=$fullscreenMode");
+    } else if (arg.startsWith('--collapse_toolbar=')) {
+      collapseToolbar = arg.substring(19) == 'true';
+      debugPrint("命令行参数: collapse_toolbar=$collapseToolbar");
+    } else if (arg.startsWith('--desktop_scaling=')) {
+      desktopScaling = arg.substring(18) == 'true';
+      debugPrint("命令行参数: desktop_scaling=$desktopScaling");
+    }
+  }
+  
+  // 将参数存储到全局变量中供后续使用
+  globalCommandLineArgs = {
+    'fullscreen': fullscreenMode,
+    'collapse_toolbar': collapseToolbar,
+    'desktop_scaling': desktopScaling,
+  };
+
+  // 兜底：从环境变量读取（Rust 侧已在 core_main 设置）
+  try {
+    final env = Platform.environment;
+    if (env.containsKey('RUSTDESK_CLI_FULLSCREEN')) {
+      globalCommandLineArgs['fullscreen'] =
+          env['RUSTDESK_CLI_FULLSCREEN']!.toLowerCase() == 'true';
+    }
+    if (env.containsKey('RUSTDESK_CLI_COLLAPSE_TOOLBAR')) {
+      globalCommandLineArgs['collapse_toolbar'] =
+          env['RUSTDESK_CLI_COLLAPSE_TOOLBAR']!.toLowerCase() == 'true';
+    }
+    if (env.containsKey('RUSTDESK_CLI_DESKTOP_SCALING')) {
+      globalCommandLineArgs['desktop_scaling'] =
+          env['RUSTDESK_CLI_DESKTOP_SCALING']!.toLowerCase() == 'true';
+    }
+  } catch (_) {}
 
   if (!isDesktop) {
     runMobileApp();
@@ -188,6 +233,10 @@ void runMultiWindow(
   String appType,
 ) async {
   await initEnv(appType);
+  // Attach CLI flags to child window arguments so sub-windows can consume them
+  argument['cli_fullscreen'] = cliArgBool('fullscreen');
+  argument['cli_collapse_toolbar'] = cliArgBool('collapse_toolbar');
+  argument['cli_desktop_scaling'] = cliArgBool('desktop_scaling');
   final title = getWindowName();
   // set prevent close to true, we handle close event manually
   WindowController.fromWindowId(kWindowId!).setPreventClose(true);

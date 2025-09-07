@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/foundation.dart';
@@ -8,6 +9,7 @@ import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/main.dart';
 import 'package:flutter_hbb/models/input_model.dart';
+import 'package:flutter_hbb/common/cli_args.dart';
 
 /// must keep the order
 // ignore: constant_identifier_names
@@ -174,6 +176,20 @@ class RustDeskMultiWindowManager {
     if (isMacOS) {
       Future.microtask(() => windowController.show());
     }
+    // 强制全屏兜底：如环境变量要求全屏，则确保窗口显示后设置全屏
+    try {
+      final env = Platform.environment;
+      if ((env['RUSTDESK_CLI_FULLSCREEN'] ?? '').toLowerCase() == 'true') {
+        // 给窗口一小段时间完成初始化再全屏
+        Future.delayed(const Duration(milliseconds: 300), () async {
+          try {
+            await WindowController.fromWindowId(windowId).show();
+            await WindowController.fromWindowId(windowId).focus();
+            await WindowController.fromWindowId(windowId).setFullscreen(true);
+          } catch (_) {}
+        });
+      }
+    } catch (_) {}
     registerActiveWindow(windowId);
     windows.add(windowId);
     return windowId;
@@ -237,6 +253,12 @@ class RustDeskMultiWindowManager {
       "password": password,
       "forceRelay": forceRelay
     };
+    // propagate CLI flags into sub-window params so that RemotePage can consume them
+    try {
+      params['cli_fullscreen'] = cliArgBool('fullscreen');
+      params['cli_collapse_toolbar'] = cliArgBool('collapse_toolbar');
+      params['cli_desktop_scaling'] = cliArgBool('desktop_scaling');
+    } catch (_) {}
     if (switchUuid != null) {
       params['switch_uuid'] = switchUuid;
     }
