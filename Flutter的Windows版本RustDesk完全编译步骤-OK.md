@@ -2,7 +2,18 @@ Flutter的Windows版本RustDesk完全编译步骤-OK：
 
 请按下面顺序执行（稳定可复现）：
 
-cd /d E:\QTcode\RustDesk_plugin01
+双击运行 e:\QTcode\RustDesk_plugin01.bak\RustDesk编译05-连接成功后隐藏远程电脑弹出的窗口\setup_build_env_11-OK.bat
+内容如下：
+```bat
+CALL "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+
+CD /d E:\QTcode\RustDesk_plugin01
+rustc --version
+cargo --version
+
+cmd /k
+```
+
 
 1) 初始化 Flutter 依赖
 ```bat
