@@ -16,7 +16,7 @@ publish_to: "none" # Remove this line if you wish to publish to pub.dev
 # Read more about iOS versioning at
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # 1.1.9-1 works for android, but for ios it becomes 1.1.91, need to set it to 1.1.9-a.1 for iOS, will get 1.1.9.1, but iOS store not allow 4 numbers
-version: 1.4.1+82
+version: 1.4.1+83
 
 environment:
   sdk: '^3.1.0'
@@ -51,12 +51,13 @@ dependencies:
   image: ^4.0.17
   back_button_interceptor: ^6.0.1
   flutter_rust_bridge: "1.80.1"
+  # 使用 hosted 版本，避免走 GitHub，便于配合清华源加速
+  # window_manager: ^0.3.9
   window_manager:
-    git:
-      url: https://github.com/rustdesk-org/window_manager
+    path: ./flutter_plugins/window_manager
+  # desktop_multi_window: ^0.2.0
   desktop_multi_window:
-    git:
-      url: https://github.com/rustdesk-org/rustdesk_desktop_multi_window
+    path: ./flutter_plugins/rustdesk_desktop_multi_window
   freezed_annotation: ^2.0.3
   flutter_custom_cursor: ^0.0.4
   window_size:
@@ -86,15 +87,11 @@ dependencies:
   flutter_launcher_icons: ^0.13.1
   flutter_keyboard_visibility: ^5.4.0
   texture_rgba_renderer:
-    git:
-      url: https://github.com/rustdesk-org/flutter_texture_rgba_renderer
-      ref: 42797e0f03141dc2b585f76c64a13974508058b4
+    path: ./flutter_plugins/texture_rgba_renderer
   percent_indicator: ^4.2.2
   dropdown_button2: ^2.0.0
   flutter_gpu_texture_renderer:
-    git:
-      url: https://github.com/rustdesk-org/flutter_gpu_texture_renderer
-      ref: 08a471bb8ceccdd50483c81cdfa8b81b07b14b87
+    path: ./flutter_plugins/flutter_gpu_texture_renderer
   uuid: ^3.0.7
   auto_size_text_field: ^2.2.1
   flex_color_picker: ^3.3.0

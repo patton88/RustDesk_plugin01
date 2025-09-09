@@ -685,28 +685,10 @@ async fn launch_server(session_id: DWORD, close_first: bool) -> ResultType<HANDL
         // in case started some elsewhere
         send_close_async("").await.ok();
     }
-    
-    // 检查客户端是否要求隐藏远程窗口
-    let hide_rw = std::env::var("RUSTDESK_CLI_HIDE_RW").unwrap_or_default() == "true";
-    
-    let cmd = if hide_rw {
-        format!(
-            "\"{}\" --server --hide-rw-server",
-            std::env::current_exe()?.to_str().unwrap_or("")
-        )
-    } else {
-        format!(
-            "\"{}\" --server",
-            std::env::current_exe()?.to_str().unwrap_or("")
-        )
-    };
-    
-    // 输出到调试文件
-    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open("RustDesk_debug.log") {
-        use std::io::Write;
-        let _ = writeln!(file, "Rust launch_server 传递隐藏参数给远程服务端: hide_rw={}, cmd={}", hide_rw, cmd);
-    }
-    
+    let cmd = format!(
+        "\"{}\" --server",
+        std::env::current_exe()?.to_str().unwrap_or("")
+    );
     launch_privileged_process(session_id, &cmd)
 }
 

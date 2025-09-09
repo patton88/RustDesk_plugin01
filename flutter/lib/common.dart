@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math';
 
 import 'package:back_button_interceptor/back_button_interceptor.dart';
@@ -2332,25 +2331,12 @@ List<String>? urlLinkToCmdArgs(Uri uri) {
     final fs = queryParameters["fullscreen"]?.toLowerCase() == 'true';
     final ct = queryParameters["collapse_toolbar"]?.toLowerCase() == 'true';
     final ds = queryParameters["desktop_scaling"]?.toLowerCase() == 'true';
-    final hrw = queryParameters["hide_rw"]?.toLowerCase() == 'true';
-    debugPrint("urlLinkToCmdArgs 解析参数: fullscreen=$fs, collapse_toolbar=$ct, desktop_scaling=$ds, hide_rw=$hrw");
-    // 输出到调试文件
-    try {
-      File('RustDesk_debug.log').writeAsStringSync("Flutter urlLinkToCmdArgs 解析参数: fullscreen=$fs, collapse_toolbar=$ct, desktop_scaling=$ds, hide_rw=$hrw\n", mode: FileMode.append);
-    } catch (_) {}
     if (queryParameters.containsKey('fullscreen') ||
         queryParameters.containsKey('collapse_toolbar') ||
-        queryParameters.containsKey('desktop_scaling') ||
-        queryParameters.containsKey('hide_rw')) {
+        queryParameters.containsKey('desktop_scaling')) {
       globalCommandLineArgs['fullscreen'] = fs;
       globalCommandLineArgs['collapse_toolbar'] = ct;
       globalCommandLineArgs['desktop_scaling'] = ds;
-      globalCommandLineArgs['hide_RW'] = hrw;
-      debugPrint("urlLinkToCmdArgs 设置全局参数: hide_RW=${globalCommandLineArgs['hide_RW']}");
-      // 输出到调试文件
-      try {
-        File('RustDesk_debug.log').writeAsStringSync("Flutter urlLinkToCmdArgs 设置全局参数: hide_RW=${globalCommandLineArgs['hide_RW']}\n", mode: FileMode.append);
-      } catch (_) {}
     }
   } catch (_) {}
 
@@ -2405,13 +2391,6 @@ List<String>? urlLinkToCmdArgs(Uri uri) {
     }
     if (param.containsKey('desktop_scaling')) {
       args.add('--desktop_scaling=${param['desktop_scaling']!.toLowerCase()}');
-    }
-    if (param.containsKey('hide_rw')) {
-      args.add('--hide_RW=${param['hide_rw']!.toLowerCase()}');
-      // 输出到调试文件
-      try {
-        File('RustDesk_debug.log').writeAsStringSync("Flutter urlLinkToCmdArgs 添加参数: --hide_RW=${param['hide_rw']!.toLowerCase()}\n", mode: FileMode.append);
-      } catch (_) {}
     }
     return args;
   }

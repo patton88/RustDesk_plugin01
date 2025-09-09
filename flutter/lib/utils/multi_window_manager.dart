@@ -173,40 +173,19 @@ class RustDeskMultiWindowManager {
         overrideType: type,
       ));
     }
-    // 检查是否需要隐藏窗口
-    final shouldHideWindow = (Platform.environment['RUSTDESK_CLI_HIDE_RW'] ?? '').toLowerCase() == 'true';
-    
-    if (isMacOS && !shouldHideWindow) {
+    if (isMacOS) {
       Future.microtask(() => windowController.show());
     }
-    
     // 强制全屏兜底：如环境变量要求全屏，则确保窗口显示后设置全屏
     try {
       final env = Platform.environment;
-      if ((env['RUSTDESK_CLI_FULLSCREEN'] ?? '').toLowerCase() == 'true' && !shouldHideWindow) {
+      if ((env['RUSTDESK_CLI_FULLSCREEN'] ?? '').toLowerCase() == 'true') {
         // 给窗口一小段时间完成初始化再全屏
         Future.delayed(const Duration(milliseconds: 300), () async {
           try {
             await WindowController.fromWindowId(windowId).show();
             await WindowController.fromWindowId(windowId).focus();
             await WindowController.fromWindowId(windowId).setFullscreen(true);
-          } catch (_) {}
-        });
-      }
-      // 隐藏窗口兜底：如环境变量要求隐藏，则确保窗口显示后隐藏
-      if (shouldHideWindow) {
-        // 输出到调试文件
-        try {
-          File('RustDesk_debug.log').writeAsStringSync("Flutter newSessionWindow 环境变量要求隐藏窗口\n", mode: FileMode.append);
-        } catch (_) {}
-        // 给窗口一小段时间完成初始化再隐藏
-        Future.delayed(const Duration(milliseconds: 200), () async {
-          try {
-            await windowController.hide();
-            // 输出到调试文件
-            try {
-              File('RustDesk_debug.log').writeAsStringSync("Flutter newSessionWindow 执行隐藏窗口\n", mode: FileMode.append);
-            } catch (_) {}
           } catch (_) {}
         });
       }
@@ -280,12 +259,6 @@ class RustDeskMultiWindowManager {
       params['cli_collapse_toolbar'] = cliArgBool('collapse_toolbar');
       params['cli_desktop_scaling'] = cliArgBool('desktop_scaling');
       params['cli_debug_log'] = cliArgBool('debug_log');
-      params['cli_hide_rw'] = cliArgBool('hide_RW');
-      debugPrint("newSession 传递参数: cli_hide_rw=${params['cli_hide_rw']}");
-      // 输出到调试文件
-      try {
-        File('RustDesk_debug.log').writeAsStringSync("Flutter newSession 传递参数: cli_hide_rw=${params['cli_hide_rw']}\n", mode: FileMode.append);
-      } catch (_) {}
     } catch (_) {}
     if (switchUuid != null) {
       params['switch_uuid'] = switchUuid;

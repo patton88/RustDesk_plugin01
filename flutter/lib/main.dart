@@ -47,23 +47,11 @@ Future<void> main(List<String> args) async {
   debugPrint("launch args: $args");
   kBootArgs = List.from(args);
   
-  // 调试：检查是否包含 hide_RW 参数
-  for (String arg in args) {
-    if (arg.contains('hide_RW')) {
-      debugPrint("发现 hide_RW 参数: $arg");
-      // 输出到调试文件
-      try {
-        File('RustDesk_debug.log').writeAsStringSync("Flutter main.dart 发现 hide_RW 参数: $arg\n", mode: FileMode.append);
-      } catch (_) {}
-    }
-  }
-  
   // 处理新增的命令行参数
   bool fullscreenMode = false;
   bool collapseToolbar = false;
   bool desktopScaling = false;
   bool debugLog = false;
-  bool hideRW = false;
   
   for (String arg in args) {
     if (arg.startsWith('--fullscreen=')) {
@@ -78,13 +66,6 @@ Future<void> main(List<String> args) async {
     } else if (arg.startsWith('--debug_log=')) {
       debugLog = arg.substring(12) == 'true';
       debugPrint("命令行参数: debug_log=$debugLog");
-    } else if (arg.startsWith('--hide_RW=')) {
-      hideRW = arg.substring(10) == 'true';
-      debugPrint("命令行参数: hide_RW=$hideRW");
-      // 输出到调试文件
-      try {
-        File('RustDesk_debug.log').writeAsStringSync("Flutter main.dart 解析参数: hide_RW=$hideRW\n", mode: FileMode.append);
-      } catch (_) {}
     }
   }
   
@@ -94,13 +75,7 @@ Future<void> main(List<String> args) async {
     'collapse_toolbar': collapseToolbar,
     'desktop_scaling': desktopScaling,
     'debug_log': debugLog,
-    'hide_RW': hideRW,
   };
-  
-  // 输出到调试文件
-  try {
-    File('RustDesk_debug.log').writeAsStringSync("Flutter main.dart 设置全局参数: hide_RW=$hideRW\n", mode: FileMode.append);
-  } catch (_) {}
 
   // 兜底：从环境变量读取（Rust 侧已在 core_main 设置）
   try {
@@ -116,14 +91,6 @@ Future<void> main(List<String> args) async {
     if (env.containsKey('RUSTDESK_CLI_DESKTOP_SCALING')) {
       globalCommandLineArgs['desktop_scaling'] =
           env['RUSTDESK_CLI_DESKTOP_SCALING']!.toLowerCase() == 'true';
-    }
-    if (env.containsKey('RUSTDESK_CLI_HIDE_RW')) {
-      globalCommandLineArgs['hide_RW'] =
-          env['RUSTDESK_CLI_HIDE_RW']!.toLowerCase() == 'true';
-      // 输出到调试文件
-      try {
-        File('RustDesk_debug.log').writeAsStringSync("Flutter main.dart 从环境变量读取: RUSTDESK_CLI_HIDE_RW=${env['RUSTDESK_CLI_HIDE_RW']}\n", mode: FileMode.append);
-      } catch (_) {}
     }
   } catch (_) {}
 
@@ -363,18 +330,8 @@ void runMultiWindow(
       // no such appType
       exit(0);
   }
-  // show window from hidden status - but respect hide_RW parameter
-  final shouldHideWindow = cliArgBool('hide_RW') || 
-      (Platform.environment['RUSTDESK_CLI_HIDE_RW'] ?? '').toLowerCase() == 'true';
-  
-  if (!shouldHideWindow) {
-    WindowController.fromWindowId(kWindowId!).show();
-  } else {
-    // 输出到调试文件
-    try {
-      File('RustDesk_debug.log').writeAsStringSync("Flutter main.dart 跳过显示窗口 (hide_RW=true)\n", mode: FileMode.append);
-    } catch (_) {}
-  }
+  // show window from hidden status
+  WindowController.fromWindowId(kWindowId!).show();
 }
 
 void runConnectionManagerScreen() async {
@@ -384,13 +341,15 @@ void runConnectionManagerScreen() async {
     const DesktopServerPage(),
     MyTheme.currentThemeMode(),
   );
-  final hide = await bind.cmGetConfig(name: "hide_cm") == 'true';
-  gFFI.serverModel.hideCm = hide;
-  if (hide) {
-    await hideCmWindow(isStartup: true);
-  } else {
-    await showCmWindow(isStartup: true);
-  }
+  // 强制：服务端连接管理器窗口在创建时即隐藏，保证稳定性
+  // 注：这里不再依赖配置项，直接隐藏。
+  try {
+    // 记录调试信息到文件
+    File('RustDesk_debug.log')
+        .writeAsStringSync('Flutter CM startup: force hide at creation\n', mode: FileMode.append);
+  } catch (_) {}
+  gFFI.serverModel.hideCm = true;
+  await hideCmWindow(isStartup: true);
   setResizable(false);
   // Start the uni links handler and redirect links to Native, not for Flutter.
   listenUniLinks(handleByFlutter: false);

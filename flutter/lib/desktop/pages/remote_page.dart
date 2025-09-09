@@ -51,7 +51,6 @@ class RemotePage extends StatefulWidget {
     this.cliCollapseToolbar,
     this.cliDesktopScaling,
     this.cliDebugLog,
-    this.cliHideRW,
   }) : super(key: key) {
     initSharedStates(id);
   }
@@ -71,7 +70,6 @@ class RemotePage extends StatefulWidget {
   final bool? cliCollapseToolbar;
   final bool? cliDesktopScaling;
   final bool? cliDebugLog;
-  final bool? cliHideRW;
   final SimpleWrapper<State<RemotePage>?> _lastState = SimpleWrapper(null);
   final DesktopTabController? tabController;
 
@@ -159,7 +157,6 @@ class _RemotePageState extends State<RemotePage>
               (globalCommandLineArgs['desktop_scaling'] ?? false))
           as bool;
       final bool debugLog = (widget.cliDebugLog ?? (globalCommandLineArgs['debug_log'] ?? false)) as bool;
-      final bool hideRW = (widget.cliHideRW ?? (globalCommandLineArgs['hide_RW'] ?? false)) as bool;
       // 环境变量读取已移除，保持实现纯净
 
       final logLine = 'CLI apply: fullscreen='+
@@ -167,9 +164,7 @@ class _RemotePageState extends State<RemotePage>
           ', collapse_toolbar='+
           collapseToolbar.toString()+
           ', desktop_scaling='+
-          desktopScaling.toString()+
-          ', hide_RW='+
-          hideRW.toString();
+          desktopScaling.toString();
       debugPrint(logLine);
       // 写入调试文件，便于排查命令行参数生效情况
       if (debugLog) {
@@ -230,14 +225,6 @@ class _RemotePageState extends State<RemotePage>
             sessionId: sessionId, value: targetStyle);
         await _ffi.canvasModel.updateViewStyle();
       } catch (_) {}
-
-      // 4) 隐藏远程窗口：现在窗口在创建时就被隐藏了，这里只需要记录日志
-      if (hideRW) {
-        // 输出到调试文件
-        try {
-          File('RustDesk_debug.log').writeAsStringSync("Flutter RemotePage 远程窗口已设置为隐藏状态\n", mode: FileMode.append);
-        } catch (_) {}
-      }
     });
     if (!isLinux) {
       WakelockPlus.enable();

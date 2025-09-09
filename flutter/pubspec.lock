@@ -338,11 +338,9 @@ packages:
   desktop_multi_window:
     dependency: "direct main"
     description:
-      path: "."
-      ref: HEAD
-      resolved-ref: b47e8385e5a75d38319ad706a64b0ead3108b093
-      url: "https://github.com/rustdesk-org/rustdesk_desktop_multi_window"
-    source: git
+      path: "flutter_plugins/rustdesk_desktop_multi_window"
+      relative: true
+    source: path
     version: "0.1.0"
   device_info_plus:
     dependency: "direct main"
@@ -537,11 +535,9 @@ packages:
   flutter_gpu_texture_renderer:
     dependency: "direct main"
     description:
-      path: "."
-      ref: "08a471bb8ceccdd50483c81cdfa8b81b07b14b87"
-      resolved-ref: "08a471bb8ceccdd50483c81cdfa8b81b07b14b87"
-      url: "https://github.com/rustdesk-org/flutter_gpu_texture_renderer"
-    source: git
+      path: "flutter_plugins/flutter_gpu_texture_renderer"
+      relative: true
+    source: path
     version: "0.0.1"
   flutter_keyboard_visibility:
     dependency: "direct main"
@@ -1297,11 +1293,9 @@ packages:
   texture_rgba_renderer:
     dependency: "direct main"
     description:
-      path: "."
-      ref: "42797e0f03141dc2b585f76c64a13974508058b4"
-      resolved-ref: "42797e0f03141dc2b585f76c64a13974508058b4"
-      url: "https://github.com/rustdesk-org/flutter_texture_rgba_renderer"
-    source: git
+      path: "flutter_plugins/texture_rgba_renderer"
+      relative: true
+    source: path
     version: "0.0.16"
   timing:
     dependency: transitive
@@ -1587,11 +1581,9 @@ packages:
   window_manager:
     dependency: "direct main"
     description:
-      path: "."
-      ref: HEAD
-      resolved-ref: "85789bfe6e4cfaf4ecc00c52857467fdb7f26879"
-      url: "https://github.com/rustdesk-org/window_manager"
-    source: git
+      path: "flutter_plugins/window_manager"
+      relative: true
+    source: path
     version: "0.3.6"
   window_size:
     dependency: "direct main"
