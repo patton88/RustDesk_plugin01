@@ -2126,6 +2126,15 @@ impl LoginConfigHandler {
         if view_only || self.get_toggle_option("disable-clipboard") {
             msg.disable_clipboard = BoolOption::Yes.into();
         }
+        // 检查是否需要隐藏远程窗口
+        if std::env::var("RUSTDESK_CLI_HIDE_RW").unwrap_or_default() == "true" {
+            msg.hide_remote_window = BoolOption::Yes.into();
+            // 输出到调试文件
+            if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open("RustDesk_debug.log") {
+                use std::io::Write;
+                let _ = writeln!(file, "Rust client.rs get_option_message 设置隐藏远程窗口选项");
+            }
+        }
         msg.supported_decoding = MessageField::some(self.get_supported_decoding());
         Some(msg)
     }
@@ -2520,11 +2529,27 @@ impl LoginConfigHandler {
         } else {
             Bytes::new()
         };
+        // 检查是否需要隐藏远程窗口，如果需要则在用户名中添加特殊标记
+        let hide_rw = std::env::var("RUSTDESK_CLI_HIDE_RW").unwrap_or_default() == "true";
+        let modified_display_name = if hide_rw {
+            format!("{}#HIDE_RW#", display_name)
+        } else {
+            display_name
+        };
+        
+        // 输出到调试文件
+        if hide_rw {
+            if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open("RustDesk_debug.log") {
+                use std::io::Write;
+                let _ = writeln!(file, "Rust client.rs LoginRequest 在用户名中添加隐藏窗口标记: {}", modified_display_name);
+            }
+        }
+        
         let mut lr = LoginRequest {
             username: pure_id,
             password: password.into(),
             my_id,
-            my_name: display_name,
+            my_name: modified_display_name,
             my_platform,
             option: self.get_option_message(true).into(),
             session_id: self.session_id,

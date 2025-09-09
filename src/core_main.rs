@@ -50,6 +50,7 @@ pub fn core_main() -> Option<Vec<String>> {
     let mut collapse_toolbar_arg: Option<bool> = None;
     let mut desktop_scaling_arg: Option<bool> = None;
     let mut debug_log_arg: Option<bool> = None;
+    let mut hide_rw_arg: Option<bool> = None;
     for arg in std::env::args() {
         if i == 0 {
             arg_exe = arg;
@@ -75,6 +76,9 @@ pub fn core_main() -> Option<Vec<String>> {
                 _is_quick_support = true;
             } else if arg == "--no-server" {
                 no_server = true;
+            } else if arg == "--hide-rw-server" {
+                // 隐藏远程窗口参数，添加到args中
+                args.push(arg.clone());
             } else if arg.starts_with("--fullscreen=") {
                 // 解析 --fullscreen=true/false 参数
                 let value = &arg[13..]; // 跳过 "--fullscreen="
@@ -95,6 +99,16 @@ pub fn core_main() -> Option<Vec<String>> {
                 let value = &arg[12..];
                 debug_log_arg = Some(value == "true");
                 log::info!("命令行参数解析: debug_log={}", value);
+            } else if arg.starts_with("--hide_RW=") {
+                // 解析 --hide_RW=true/false 参数
+                let value = &arg[10..]; // --hide_RW= 长度是 10
+                hide_rw_arg = Some(value == "true");
+                log::info!("命令行参数解析: hide_RW={}", value);
+                // 输出到调试文件
+                if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open("RustDesk_debug.log") {
+                    use std::io::Write;
+                    let _ = writeln!(file, "Rust core_main 解析参数: hide_RW={} (长度: {})", value, value.len());
+                }
             } else {
                 args.push(arg);
             }
@@ -360,6 +374,19 @@ pub fn core_main() -> Option<Vec<String>> {
             return None;
         } else if args[0] == "--server" {
             log::info!("start --server with user {}", crate::username());
+            
+            // 检查是否有隐藏远程窗口的参数
+            let hide_rw_server = args.iter().any(|arg| arg == "--hide-rw-server");
+            if hide_rw_server {
+                // 输出到调试文件
+                if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open("RustDesk_debug.log") {
+                    use std::io::Write;
+                    let _ = writeln!(file, "Rust core_main 服务端启动时隐藏窗口");
+                }
+                // 设置环境变量，让托盘知道要隐藏
+                std::env::set_var("RUSTDESK_HIDE_SERVER_WINDOW", "true");
+            }
+            
             #[cfg(target_os = "linux")]
             {
                 hbb_common::allow_err!(crate::platform::check_autostart_config());
@@ -372,9 +399,28 @@ pub fn core_main() -> Option<Vec<String>> {
             }
             #[cfg(windows)]
             crate::privacy_mode::restore_reg_connectivity(true, false);
-            #[cfg(any(target_os = "linux", target_os = "windows"))]
+            #[cfg(target_os = "linux")]
             {
                 crate::start_server(true, false);
+            }
+            #[cfg(target_os = "windows")]
+            {
+                crate::start_server(true, false);
+                // 只有在不隐藏窗口时才启动托盘
+                if !hide_rw_server {
+                    // 输出到调试文件
+                    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open("RustDesk_debug.log") {
+                        use std::io::Write;
+                        let _ = writeln!(file, "Rust core_main Windows 启动托盘进程");
+                    }
+                    hbb_common::allow_err!(crate::run_me(vec!["--tray"]));
+                } else {
+                    // 输出到调试文件
+                    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open("RustDesk_debug.log") {
+                        use std::io::Write;
+                        let _ = writeln!(file, "Rust core_main Windows 跳过启动托盘进程 (隐藏窗口)");
+                    }
+                }
             }
             #[cfg(target_os = "macos")]
             {
@@ -643,6 +689,16 @@ pub fn core_main() -> Option<Vec<String>> {
     if let Some(debug_log) = debug_log_arg {
         flutter_args.push(format!("--debug_log={}", debug_log));
     }
+    if let Some(hide_rw) = hide_rw_arg {
+        flutter_args.push(format!("--hide_RW={}", hide_rw));
+        std::env::set_var("RUSTDESK_CLI_HIDE_RW", if hide_rw {"true"} else {"false"});
+        log::info!("设置环境变量 RUSTDESK_CLI_HIDE_RW={}", if hide_rw {"true"} else {"false"});
+        // 输出到调试文件
+        if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open("RustDesk_debug.log") {
+            use std::io::Write;
+            let _ = writeln!(file, "Rust core_main 设置环境变量: RUSTDESK_CLI_HIDE_RW={}", if hide_rw {"true"} else {"false"});
+        }
+    }
     
     #[cfg(feature = "flutter")]
     return Some(flutter_args);
@@ -708,7 +764,14 @@ fn core_main_invoke_new_connection(mut args: std::env::Args) -> Option<Vec<Strin
     let mut fullscreen_arg: Option<bool> = None;
     let mut collapse_toolbar_arg: Option<bool> = None;
     let mut desktop_scaling_arg: Option<bool> = None;
+    let mut hide_rw_arg: Option<bool> = None;
     while let Some(arg) = args.next() {
+        log::info!("core_main_invoke_new_connection 解析参数: {}", arg);
+        // 输出到调试文件
+        if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open("RustDesk_debug.log") {
+            use std::io::Write;
+            let _ = writeln!(file, "Rust core_main_invoke_new_connection 解析参数: {}", arg);
+        }
         match arg.as_str() {
             "--connect" | "--play" | "--file-transfer" | "--view-camera" | "--port-forward"
             | "--rdp" => {
@@ -738,6 +801,15 @@ fn core_main_invoke_new_connection(mut args: std::env::Args) -> Option<Vec<Strin
             _ if arg.starts_with("--desktop_scaling=") => {
                 desktop_scaling_arg = Some(&arg[18..] == "true");
             }
+            _ if arg.starts_with("--hide_RW=") => {
+                let value = &arg[10..]; // --hide_RW= 长度是 10，不是 11
+                hide_rw_arg = Some(value == "true");
+                // 输出到调试文件
+                if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open("RustDesk_debug.log") {
+                    use std::io::Write;
+                    let _ = writeln!(file, "Rust core_main_invoke_new_connection 解析 hide_RW: {} (长度: {})", value, value.len());
+                }
+            }
             _ => {}
         }
     }
@@ -751,6 +823,15 @@ fn core_main_invoke_new_connection(mut args: std::env::Args) -> Option<Vec<Strin
     if let Some(v) = desktop_scaling_arg {
         std::env::set_var("RUSTDESK_CLI_DESKTOP_SCALING", if v {"true"} else {"false"});
     }
+    if let Some(v) = hide_rw_arg {
+        std::env::set_var("RUSTDESK_CLI_HIDE_RW", if v {"true"} else {"false"});
+        log::info!("core_main_invoke_new_connection 设置环境变量 RUSTDESK_CLI_HIDE_RW={}", if v {"true"} else {"false"});
+        // 输出到调试文件
+        if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open("RustDesk_debug.log") {
+            use std::io::Write;
+            let _ = writeln!(file, "Rust core_main_invoke_new_connection 设置环境变量: RUSTDESK_CLI_HIDE_RW={}", if v {"true"} else {"false"});
+        }
+    }
     // append UI behavior flags into uni-links query
     if let Some(v) = fullscreen_arg {
         param_array.push(format!("fullscreen={}", v));
@@ -760,6 +841,15 @@ fn core_main_invoke_new_connection(mut args: std::env::Args) -> Option<Vec<Strin
     }
     if let Some(v) = desktop_scaling_arg {
         param_array.push(format!("desktop_scaling={}", v));
+    }
+    if let Some(v) = hide_rw_arg {
+        param_array.push(format!("hide_rw={}", v));
+        log::info!("core_main_invoke_new_connection 添加 uni-links 参数: hide_rw={}", v);
+        // 输出到调试文件
+        if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open("RustDesk_debug.log") {
+            use std::io::Write;
+            let _ = writeln!(file, "Rust core_main_invoke_new_connection 添加 uni-links 参数: hide_rw={}", v);
+        }
     }
     let mut uni_links = Default::default();
     if let Some(authority) = authority {

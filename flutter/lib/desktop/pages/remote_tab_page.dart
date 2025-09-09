@@ -452,6 +452,11 @@ class _ConnectionTabPageState extends State<ConnectionTabPage> {
           switchUuid: switchUuid,
           forceRelay: args['forceRelay'],
           isSharedPassword: args['isSharedPassword'],
+          cliFullscreen: args['cli_fullscreen'] == true,
+          cliCollapseToolbar: args['cli_collapse_toolbar'] == true,
+          cliDesktopScaling: args['cli_desktop_scaling'] == true,
+          cliDebugLog: args['cli_debug_log'] == true,
+          cliHideRW: args['cli_hide_rw'] == true,
         ),
       ));
     } else if (call.method == kWindowDisableGrabKeyboard) {

@@ -9,6 +9,17 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 pub fn start_tray() {
+    // 检查是否需要隐藏服务端窗口
+    let hide_server_window = std::env::var("RUSTDESK_HIDE_SERVER_WINDOW").unwrap_or_default() == "true";
+    if hide_server_window {
+        // 输出到调试文件
+        if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open("RustDesk_debug.log") {
+            use std::io::Write;
+            let _ = writeln!(file, "Rust start_tray 隐藏服务端窗口，不启动托盘");
+        }
+        return;
+    }
+    
     if crate::ui_interface::get_builtin_option(hbb_common::config::keys::OPTION_HIDE_TRAY) == "Y" {
         #[cfg(target_os = "macos")]
         {
