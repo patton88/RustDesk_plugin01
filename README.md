@@ -25,7 +25,7 @@ This project is a standalone application that invokes RustDesk only as an **exte
 
 本项目作为独立程序，仅通过**外部进程调用** RustDesk。若您通过网络向终端用户提供本软件服务，请遵守 AGPL-3.0 协议条款：您有权获取本仓库发布的完整修改版源代码。
 
-For the full license text, please refer to the [LICENSE](LICENSE) file in this repository. 完整许可证文本请参见本仓库 [LICENSE](LICENSE) 文件。
+For the full license text, please refer to the [LICENCE](LICENCE) file in this repository. 完整许可证文本请参见本仓库 [LICENCE](LICENCE) 文件。
 
 ---
 
